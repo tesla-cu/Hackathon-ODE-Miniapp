@@ -1,0 +1,11 @@
+.build/
+build/
+.test/
+**/.DS_Store
+**/*.mod
+**/*.o
+**/*.hst
+**/*.log
+**/*.dat
+**/*.exe
+**/*.dSYM

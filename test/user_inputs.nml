@@ -1,0 +1,51 @@
+!> Program time integration parameters
+&solve_params
+    integrator = 'rkc',
+        !! ODE solver choice {'pprk4', 'rkc', 'rkc77'}
+    start_time = 0.0,
+        !! start time of simulation [s]
+    end_time = 1.0,
+        !! end time of simulation [s]
+    save_name = 'tracers.hst',
+        !! file name for full solution outputs
+    dt_save = 5e-2,
+        !! solution save rate [s]
+/
+
+!> Chemistry setup parameters
+&chem_params
+    model = 'carbonate',
+        !! choices are {'carbonate', 'NPZD'}
+    temperature = 25.0,
+        !! temperature [degC]
+    salinity = 36.9
+        !! salinity [PSU]
+/
+
+!> Initial conditions for carbonate chemistry model
+&carbonate_ic
+    tracers(1) = 16.0,
+        !! Carbon Dioxide, [CO2]... Colin just picked some numbers away from equilibrium
+    tracers(2) = 1.67006e03,
+        !! Bicarbonate, [HCO3-]
+    tracers(3) = 3.14655e02,
+        !! Carbonate, [CO32-]
+    tracers(4) = 2.96936e02,
+        !! Boric Acid, [B(OH)3]
+    tracers(5) = 1.18909e02,
+        !! Tetrahydroxyborate
+    tracers(6) = 20.0
+        !! Hydroxide, [OH-]...  Colin just picked some numbers away from equilibrium
+/
+
+!> Initial conditions for an NPZD model
+&npzd_ic
+    tracers(1) = 2.5,
+        !! Nutrients (N) concentration [mol/m^3?]
+    tracers(2) = 1.5,
+        !! Phytoplankton (P) concentration [mol/m^3?]
+    tracers(3) = 4.0,
+        !! Zooplankton (Z) concentration [mol/m^3?]
+    tracers(4) = 0.0
+        !! Detritus (D) concentration [mol/m^3?]
+/

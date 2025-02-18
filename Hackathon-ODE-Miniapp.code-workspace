@@ -1,0 +1,28 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.insertFinalNewline": true,
+        "files.trimFinalNewlines": true,
+        "files.trimTrailingWhitespace": true,
+        "[FortranFreeForm]": {
+            "editor.rulers": [80, 99, 132]
+        },
+        "fortran.linter.initialize": true,
+        "fortran.linter.includePaths": [
+            "${workspaceFolder}/.build/"
+        ],
+        "fortran.linter.extraArgs": [
+            "-fdefault-real-8 -fdefault-double-8 -fimplicit-none -std=2018 -fPIC -pipe",
+            "-Og -g2 -Wall -Wextra -fcheck=all"
+        ],
+        "fortran.linter.modOutput": "-J./.build",
+        "fortran.formatting.formatter": "findent",
+        "fortran.formatting.findentArgs": [
+            "-Rr -i4"
+        ]
+    }
+}
