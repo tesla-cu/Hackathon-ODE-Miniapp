@@ -25,8 +25,6 @@ program chem_ode_miniapp
 
     real, allocatable :: tracers(:)
         !! pointwise ("0D") reacting scalars state vector
-    real, allocatable :: dcdt(:)
-        !! pointwise ("0D") chemical reaction rate vector
     real, allocatable:: args(:)
         !! pointwise ("0D") non-reacting scalars vector (e.g., temperature, salinity, etc.)
 
@@ -50,7 +48,7 @@ program chem_ode_miniapp
     ! Initialize chemistry, which associates the `compute_chemistry` pointer
     print *, 'chem model = ', model
     call initialize_chemistry(trim(model), nscl, nargs)
-    allocate (tracers(nscl), dcdt(nscl), args(nargs))
+    allocate (tracers(nscl), args(nargs))
 
     ! Read in the chemical initial condition from the input file
     if (model == 'carbonate') then
@@ -90,9 +88,8 @@ program chem_ode_miniapp
 
     ! Finalization -------------------------------------------------------------
     call finalize_integrator()
-    call save_tracers(time_in_days=.true.) ! this should have a test condition
     close (save_unit)
-    deallocate (tracers, dcdt, args)
+    deallocate (tracers, args)
 
 contains ! ---------------------------------------------------------------------
 
