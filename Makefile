@@ -1,7 +1,5 @@
-.SUFFIXES:
-
 F90 := gfortran
-FFLAGS := -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fPIC -pipe -std=f2018 -J./.build
+FFLAGS := -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fPIC -pipe -std=f2018 -J./build
 LDFLAGS := -lm
 
 # Og allows some O1 optimizations while making debugging cleaner/clearer than O0
@@ -21,40 +19,26 @@ OPT2 := -O2 $(optW)
 OPT3 := -O3
 OPT4 := -O3 -ffast-math -fno-protect-parens
 
-target := test/miniapp.exe
-sources := src/pprk4.f90 src/miniapp_rkc.f90 src/ncarles_rkc.f90 src/integrators.f90 src/chemistry.f90 src/chem_ode_miniapp.f90
+# ----------------------------------------------------------------------------------------
+SRC_DIR := ./src
+vpath %.f90 $(SRC_DIR)
+target := ./test/miniapp.exe
+MOD_SRCS := src/pprk4.f90 src/miniapp_rkc.f90 src/ncarles_rkc.f90 src/integrators.f90 src/chemistry.f90
+MODS := $(MOD_SRCS:.f90=.mod)
 
 # the first recipe in this list is the default when running `make` without specifying a recipe.
-fast:
-	$(F90) $(FFLAGS) $(OPT3) $(sources) -o $(target) $(LDFLAGS)
+debug: $(MODS)
+	$(F90) $(FFLAGS) $(DBG1) $(MOD_SRCS) src/chem_ode_miniapp.f90 -o $(target) $(LDFLAGS)
 
-debug:
-	$(F90) $(FFLAGS) $(DBG1) $(sources) -o $(target) $(LDFLAGS)
+fast: $(MODS)
+	$(F90) $(FFLAGS) $(OPT3) $(MOD_SRCS) src/chem_ode_miniapp.f90 -o $(target) $(LDFLAGS)
 
-syntax:
-	$(F90) $(FFLAGS) $(SYNTAX) $(sources)
+syntax: $(MODS)
+	$(F90) $(FFLAGS) $(SYNTAX) $(MOD_SRCS) src/chem_ode_miniapp.f90
 
-.PHONY: debug1
-debug1: debug
-
-debug2:
-	$(F90) $(FFLAGS) $(DBG2) $(sources) -o $(target) $(LDFLAGS)
-
-debug3:
-	$(F90) $(FFLAGS) $(DBG3) $(sources) -o $(target) $(LDFLAGS)
-
-opt1:
-	$(F90) $(FFLAGS) $(OPT1) $(sources) -o $(target) $(LDFLAGS)
-
-opt2:
-	$(F90) $(FFLAGS) $(OPT2) $(sources) -o $(target) $(LDFLAGS)
-
-.PHONY: opt3
-opt3: fast
-
-opt4:
-	$(F90) $(FFLAGS) $(OPT4) $(SOURCES) -o $(target) $(LDFLAGS)
-	$(F90) $(FFLAGS) $(OPT4) $(SOURCES) -o $(target) $(LDFLAGS)
+# make step for module files
+%.mod : %.f90
+	$(MPI) $(FFLAGS) -c $<
 
 .PHONY: format
 format:
@@ -64,9 +48,10 @@ format:
 # This removes everything in the .build/ directory
 .PHONY: clean
 clean:
-	rm -rf .build/*
+	rm -rf ./build/*
+	rm -rf $(target) $(target).dSYM
 
 # this removes everything in the .build/ directory AND any accidental outputs made in the project directory
 .PHONY: realclean
 realclean: clean
-	rm -rf $(exec) *.o *.mod *.dSYM
+	rm -rf *.o *.mod *.dSYM
