@@ -20,53 +20,66 @@ program chem_ode_miniapp
         !! time integration variables, [s]
     real :: temperature = 25.0, salinity = 35.0
         !! temperature [deg C], and salinity [units]
+    integer :: nx(3)
+        !! 3D size of domain
     integer :: nscl, nargs
-    integer :: j, save_unit, nml_unit
+    integer :: nt, save_unit, nml_unit
+    integer :: ix, jy, kz
 
-    real, allocatable :: tracers(:)
-        !! pointwise ("0D") reacting scalars state vector
-    real, allocatable :: dcdt(:)
-        !! pointwise ("0D") chemical reaction rate vector
-    real, allocatable:: args(:)
-        !! pointwise ("0D") non-reacting scalars vector (e.g., temperature, salinity, etc.)
+    real, allocatable :: tracers(:, :, :, :), y_0(:), y(:)
+        !! 3D reacting scalars state vector and 0D initial condition
+    real, allocatable:: args(:, :, :, :), p_0(:), p(:)
+        !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
+        !! and it's 0D initial condition
 
-    namelist /solve_params/ integrator, start_time, end_time, save_name, dt_save
-        !! Time integration parameters
-    namelist /chem_params/ model, temperature, salinity
-        !! Generic parameters relevant to all chemistry models
-    namelist /carbonate_ic/ tracers
-        !! initial conditions
-    namelist /npzd_ic/ tracers
-        !! initial conditions
+    namelist /params/ integrator, start_time, end_time, save_name, dt_save, &
+                      nx, model, temperature, salinity
+    namelist /carbonate_ic/ y_0
+    namelist /npzd_ic/ y_0
 
     ! Configuration and Setup --------------------------------------------------
     ! Read namelists from input file
     open (newunit=nml_unit, file=input_file, status="old")
-    read (nml_unit, nml=solve_params)
-    rewind(nml_unit)
-    read (nml_unit, nml=chem_params)
+    read (nml_unit, nml=params)
     rewind(nml_unit)
 
     ! Initialize chemistry, which associates the `compute_chemistry` pointer
     print *, 'chem model = ', model
     call initialize_chemistry(trim(model), nscl, nargs)
-    allocate (tracers(nscl), dcdt(nscl), args(nargs))
+
+    ! NOTE: allocation of nscl/nargs as intermediate dimension before
+    ! z-direction is how NCAR-LES does it currently. This is sure
+    ! to be inefficient and should be changed as part of testing.
+    ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
+    allocate(tracers(nx(1), nx(2), nscl, nx(3)), y_0(nscl), y(nscl))
+    allocate(args(nx(1), nx(2), nargs, nx(3)), p_0(nargs), p(nargs))
 
     ! Read in the chemical initial condition from the input file
     if (model == 'carbonate') then
         read (nml_unit, nml=carbonate_ic)
-        args(1) = temperature
-        args(2) = salinity
+        p_0(1) = temperature
+        p_0(2) = salinity
     else if (model == 'npzd') then
         read (nml_unit, nml=npzd_ic)
-        args(1) = temperature
+        p_0(1) = temperature
     end if
+
+    !TODO: Add perturbations to the ICs, like sinusoids or random noise, so that
+    !      each spatial point solves a slightly different trajectory in state space
+    do kz = 1, nx(3)
+        do jy = 1, nx(2)
+            do ix = 1, nx(1)
+                tracers(ix, jy, :, kz) = y_0
+                args(ix, jy, :, kz) = p_0
+            end do
+        end do
+    end do
 
     close (nml_unit)
 
     ! Initialize the ODE solver, which associates the `solve_interval` pointer
     print *, 'integrator = ', integrator
-    call initialize_integrator(integrator, rhs_wrapped, tracers, 1e-8, 1e-6, 1e-10)
+    call initialize_integrator(integrator, rhs_wrapped, y_0, 1e-8, 1e-6, 1e-10)
 
     ! Open file for saving tracer history
     open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
@@ -75,24 +88,32 @@ program chem_ode_miniapp
     call save_tracers(time_in_days=.true.)
 
     ! Time integration loop ----------------------------------------------------
-    j = 0
+    nt = 0
     do while (time < end_time)
 
-        !apply sources and sinks
-        call solve_interval(time, time + dt_save, tracers, args)
+        do kz = 1, nx(3)
+            do jy = 1, nx(2)
+                do ix = 1, nx(1)
+                    y = tracers(ix, jy, :, kz)
+                    p = args(ix, jy, :, kz)
+                    call solve_interval(time, time + dt_save, y, p)
+                    tracers(ix, jy, :, kz) = y
+                end do
+            end do
+        end do
+
         time = time + dt_save
 
-        print *, 'saving output', j
+        print *, 'saving output', nt
         call save_tracers(time_in_days=.true.)
-        j = j + 1
+        nt = nt + 1
 
     end do
 
     ! Finalization -------------------------------------------------------------
-    call finalize_integrator()
-    call save_tracers(time_in_days=.true.) ! this should have a test condition
     close (save_unit)
-    deallocate (tracers, dcdt, args)
+    call finalize_integrator()
+    deallocate (tracers, args, y_0, y, p_0, p)
 
 contains ! ---------------------------------------------------------------------
 
@@ -123,7 +144,7 @@ contains ! ---------------------------------------------------------------------
         write (str_nscl, '(I0)') nscl + 1 ! +1 for time
         fmt = '('//trim(str_nscl)//'ES15.5)'
 
-        write (save_unit, fmt) io_time, tracers
+        write (save_unit, fmt) io_time, tracers(1, 1, :, 1)
     end subroutine save_tracers
 
 end program chem_ode_miniapp
