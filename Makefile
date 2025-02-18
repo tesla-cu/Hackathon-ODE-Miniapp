@@ -74,7 +74,7 @@ $(EXECUTABLE): $(OBJECTS)
 # Rule to compile source files into object files
 $(BUILDDIR)/%.o: $(SRCDIR)/%.f90
 	@mkdir -p $(BUILDDIR)
-	$(FC) $(FFLAGS) -c $<
+	$(FC) $(FFLAGS) -c $< -o $@
 
 .PHONY: format
 format:
@@ -89,4 +89,4 @@ clean:
 # this removes everything in the .build/ directory AND any accidental outputs made in the project directory
 .PHONY: realclean
 realclean: clean
- 	rm -rf *.o *.mod *.dSYM
+	rm -rf *.o *.mod *.dSYM
