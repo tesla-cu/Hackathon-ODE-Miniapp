@@ -4,7 +4,7 @@
         !! ODE solver choice {'pprk4', 'rkc', 'rkc77'}
     start_time = 0.0,
         !! start time of simulation [s]
-    end_time = 1.0,
+    end_time = 1.0e1,
         !! end time of simulation [s]
     save_name = 'tracers.hst',
         !! file name for full solution outputs
