@@ -67,16 +67,16 @@ contains
 
         ! work arrays
         real, dimension(:), allocatable :: y_end, ydot, vtemp1, vtemp2, eigenv
-            ! internal work arrays: not all may be necessary, haven't figured out minimum
-            ! needed working memory. `eigenv` used to be stored in work(4:)
+        ! internal work arrays: not all may be necessary, haven't figured out minimum
+        ! needed working memory. `eigenv` used to be stored in work(4:)
 
         real :: err_old, h_old, h_n, rho
-            ! these variables used to be stored in work(0:3)
+        ! these variables used to be stored in work(0:3)
         integer :: ny, nstep, s, i
         real :: t_rkc, hmax, hmin, err, est, adapt, temp1, temp2
 
         ! Initialize progress variables
-        allocate(y_end, ydot, vtemp1, vtemp2, eigenv, mold=y)
+        allocate (y_end, ydot, vtemp1, vtemp2, eigenv, mold=y)
         ny = size(y)
 
         t_rkc = t_i
@@ -306,7 +306,7 @@ contains
         d2zjm1 = 0.0
         d2zjm2 = 0.0
 
-        allocate(y_j, mold=y_0)
+        allocate (y_j, mold=y_0)
 
         do j = 2, s
             zj = 2.0 * w0 * zjm1 - zjm2
@@ -323,7 +323,7 @@ contains
             call rhs(t_rkc, y_jm1, y_j, p)
 
             y_j = (1.0 - mu - nu) * y_0 + (mu * y_jm1) + (nu * y_jm2) &
-                + h * mu_t * (y_j - (gamma_t * F_0))
+                  + h * mu_t * (y_j - (gamma_t * F_0))
             c_j = (mu * c_jm1) + (nu * c_jm2) + mu_t * (1.0 - gamma_t)
 
             y_jm2 = y_jm1
