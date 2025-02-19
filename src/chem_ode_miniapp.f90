@@ -24,9 +24,9 @@ program chem_ode_miniapp
         !! 3D size of domain
     integer :: nscl, nargs
     integer :: nt, save_unit, nml_unit
-    integer :: ix, jy, kz
+    integer :: ix, jy, kz, ip
        !! MPI variables
-    integer:: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d
+    integer:: rank, nprocs, ierr, px, py !, px_rank, py_rank, comm2d
     
 
     real, allocatable :: tracers(:, :, :, :), tracers_loc(:, :, :, :), y_0(:), y(:)
@@ -44,16 +44,11 @@ program chem_ode_miniapp
     call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
     call MPI_COMM_SIZE(MPI_COMM_WORLD, nprocs, ierr)
 
-    ! breaking down the matrices 
-    px = floor(sqrt(real(nprocs)))
-    do while (mod(nprocs, px) /= 0)
-        px = px - 1
-    end do
-    py = nprocs / px
+    print *, 'Hello World from process: ', rank, 'of ', nprocs
 
-        ! Create a spatial dimensions
-    !CALL MPI_Cart_create(MPI_COMM_WORLD, 2, [px, py], [.TRUE., .TRUE.], .TRUE., comm2d)
-    !CALL MPI_Cart_coords(comm2d, rank, 2, [px_rank, py_rank], ierr)
+    ! breaking down the matrices 
+    px = int(sqrt(real(nprocs)))
+    py = nprocs / px
 
     nx_loc(1) = nx(1) / px
     nx_loc(2) = nx(2) / py
@@ -66,45 +61,60 @@ program chem_ode_miniapp
     rewind(nml_unit)
 
     ! Initialize chemistry, which associates the `compute_chemistry` pointer
-    print *, 'chem model = ', model
+    !print *, 'chem model = ', model
     call initialize_chemistry(trim(model), nscl, nargs)
 
-    ! NOTE: allocation of nscl/nargs as intermediate dimension before
-    ! z-direction is how NCAR-LES does it currently. This is sure
-    ! to be inefficient and should be changed as part of testing.
-    ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
-    if (rank == 0) then
-        allocate(tracers(nx(1), nx(2), nscl, nx(3)))
-        allocate(args(nx(1), nx(2), nargs, nx(3)))
-    end if
+    allocate(tracers(nx(1), nx(2), nscl, nx(3)))
+    allocate(args(nx(1), nx(2), nargs, nx(3)))
     
     allocate(tracers_loc(nx_loc(1), nx_loc(2), nscl, nx_loc(3)), y_0(nscl), y(nscl))
     allocate(args_loc(nx_loc(1), nx_loc(2), nargs, nx_loc(3)), p_0(nargs), p(nargs))
 
-    ! Read in the chemical initial condition from the input file
-    if (model == 'carbonate') then
-        read (nml_unit, nml=carbonate_ic)
-        p_0(1) = temperature
-        p_0(2) = salinity
-    else if (model == 'npzd') then
-        read (nml_unit, nml=npzd_ic)
-        p_0(1) = temperature
-    end if
-
-    ! CHANGE FOR LOOP FOR MPI
-    do kz = 1, nx_loc(3)
-        do jy = 1, nx_loc(2)
-            do ix = 1, nx_loc(1)
-                tracers_loc(ix, jy, :, kz) = y_0
-                args_loc(ix, jy, :, kz) = p_0
+    if (rank == 0) then
+        ! Read in the chemical initial condition from the input file
+        if (model == 'carbonate') then
+            read (nml_unit, nml=carbonate_ic)
+            p_0(1) = temperature
+            p_0(2) = salinity
+        else if (model == 'npzd') then
+            read (nml_unit, nml=npzd_ic)
+            p_0(1) = temperature
+        end if
+        
+        do kz = 1, nx(3)
+            do jy = 1, nx(2)
+                do ix = 1, nx(1)
+                    tracers(ix, jy, :, kz) = y_0
+                    args(ix, jy, :, kz) = p_0
+                end do
             end do
         end do
-    end do
+        print *, '0, tracer last grid point ', tracers(nx(1), nx(2), :, nx(3))
+        print *, '0, tracer first grid point ', tracers(1, 1, :, 1)
+    end if 
 
     close (nml_unit)
 
+    ! broadcast the tracers and args to all processes
+    call MPI_Bcast(tracers, nx(1)*nx(2)*nscl*nx(3), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+    call MPI_Bcast(args, nx(1)*nx(2)*nargs*nx(3), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
+    print *, 'Hello World from process: ', rank, 'of ', nprocs
+    print *, 'after bcast, tracer last grid point ', tracers(nx(1), nx(2), :, nx(3))
+    print *, 'afterbcast, tracer first grid point ', tracers(1, 1, :, 1)
+    ! scatter the tracers and args to all processes
+    if (rank == 0) then
+        do ip = 1, nprocs-1
+            call MPI_Send(tracers(ip * nx_loc(1) + 1:(ip+1) * nx_loc(1), &
+                            ip * nx_loc(2) + 1:(ip+1) * nx_loc(2), :, 1:nx_loc(3)), &
+                            nx_loc(1) * nx_loc(1) * nscl * nx_loc(3), MPI_REAL, ip, &
+                            0, MPI_COMM_WORLD, ierr)
+        end do
+        tracers_loc = tracers(1:nx_loc(1), 1:nx_loc(2), :, 1:nx_loc(3))  ! Root keeps first chunk
+    else
+        call MPI_Recv(tracers_loc, nx_loc(1) * nx_loc(1) * nscl * nx_loc(3), MPI_REAL, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+    end if
     ! Initialize the ODE solver, which associates the `solve_interval` pointer
-    print *, 'integrator = ', integrator
+    !print *, 'integrator = ', integrator
     call initialize_integrator(integrator, rhs_wrapped, y_0, 1e-8, 1e-6, 1e-10)
 
     ! Open file for saving tracer history
@@ -180,11 +190,15 @@ contains ! ---------------------------------------------------------------------
         do i = 1, nscl
             io_tracer(i) = sum(tracers(1:nx(1), 1:nx(2), i, 1:nx(3))) / (nx(1) * nx(2) * nx(3))
         end do
-
+       
+        print *, 'tracer last grid point ', tracers(nx(1), nx(2), :, nx(3)) 
+        print *, 'tracer first grid point ', tracers(1, 1, :, 1)
+        print *, 'averaged ', io_tracer
         write (str_nscl, '(I0)') nscl + 1 ! +1 for time
         fmt = '('//trim(str_nscl)//'ES15.5)'
 
-        write (save_unit, fmt) io_time, io_tracer
+        write (save_unit, fmt) io_time, tracers(1, 1, :, 1) !io_tracer
     end subroutine save_tracers
 
 end program chem_ode_miniapp
+
