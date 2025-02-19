@@ -89,8 +89,9 @@ program chem_ode_miniapp
                 end do
             end do
         end do
-        print *, '0, tracer last grid point ', tracers(nx(1), nx(2), :, nx(3))
-        print *, '0, tracer first grid point ', tracers(1, 1, :, 1)
+    else
+        tracers(:, :, :, :) = 0.0
+        args(:, :, :, :) = 0.0
     end if 
 
     close (nml_unit)
@@ -98,9 +99,6 @@ program chem_ode_miniapp
     ! broadcast the tracers and args to all processes
     call MPI_Bcast(tracers, nx(1)*nx(2)*nscl*nx(3), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
     call MPI_Bcast(args, nx(1)*nx(2)*nargs*nx(3), MPI_REAL, 0, MPI_COMM_WORLD, ierr)
-    print *, 'Hello World from process: ', rank, 'of ', nprocs
-    print *, 'after bcast, tracer last grid point ', tracers(nx(1), nx(2), :, nx(3))
-    print *, 'afterbcast, tracer first grid point ', tracers(1, 1, :, 1)
     ! scatter the tracers and args to all processes
     if (rank == 0) then
         do ip = 1, nprocs-1
