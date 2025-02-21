@@ -1,5 +1,5 @@
 COMPILER := intel
-FC := ifort # OR mpif90
+FC := ifx # OR mpif90
 SRCDIR := src
 BUILDDIR := build
 
@@ -75,7 +75,7 @@ debug: OPTIONS=$(DBG1)
 debug: $(EXECUTABLE)
 
 .PHONY: profile
-profile: OPTIONS=$(OPT1)
+profile: OPTIONS=$(OPT2)
 profile: $(EXECUTABLE)
 
 .PHONY: fast
