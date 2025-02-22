@@ -15,7 +15,8 @@ module pprk4
     procedure(time_derivative), pointer :: rhs
     abstract interface
         subroutine time_derivative(t, y, ydot, p)
-            real, allocatable, intent(in) :: t, y(:, :, :, :)
+            real, intent(in) :: t
+            real, allocatable, intent(in) :: y(:, :, :, :)
             real, allocatable, intent(inout) :: ydot(:, :, :, :)
             real, allocatable, intent(in), optional :: p(:, :, :, :)
         end subroutine time_derivative
@@ -45,10 +46,10 @@ contains
 
         real, intent(in) :: ti, tf
             !! the initial and final times over which to evolve the solution.
-        real, intent(inout) :: y(:, :, :, :)
+        real, allocatable, intent(inout) :: y(:, :, :, :)
             !! Solution vector at initial time `ti` on input, and at final time
             !! `tf` on output.
-        real, intent(in), optional :: p(:, :, :, :)
+        real, allocatable, intent(in), optional :: p(:, :, :, :)
             !! user-supplied extra arguments (aka [p]arameters) to the RHS function
 
         real :: t, dt
@@ -70,9 +71,9 @@ contains
 
         real, intent(inout) :: t, dt
             !! Current time of the solution on input, final time of RK4 step on output
-        real, intent(inout) :: y(:, :, :, :)
+        real, allocatable, intent(inout) :: y(:, :, :, :)
             !! Solution vector at current time on input, at end of step on output
-        real, intent(in), optional :: p(:, :, :, :)
+        real, allocatable, intent(in), optional :: p(:, :, :, :)
             !! user-supplied extra arguments (aka [p]arameters) to the RHS function
 
         real :: dt_new
@@ -81,18 +82,18 @@ contains
         ! take a step at largest-possible dt, trying multiple times if necessary
         do
             ! Integrate one full RK4 step
-            temp(...) = y ! stores intermediate stage states
-            y_new(...) = y ! accumulates updated state
+            temp(:, :, :, :) = y ! stores intermediate stage states
+            y_new(:, :, :, :) = y ! accumulates updated state
             do irk = 1, 4
                 call rhs(t, temp, dydt, p)
-                temp(...) = y + b(irk) * dt * dydt
-                y_new(...) = y_new + a(irk) * dt * dydt
+                temp(:, :, :, :) = y + b(irk) * dt * dydt
+                y_new(:, :, :, :) = y_new + a(irk) * dt * dydt
             end do
 
             ! check positivity of solution
             if (minval(y_new) > 0.0) then
                 ! end the loop
-                y(...) = y_new
+                y(:, :, :, :) = y_new
                 exit
             else
                 ! redo the step with dt = 0.5 * dt
@@ -114,24 +115,24 @@ contains
         !! Take a single plain RK4 integration step, of prescribed size dt.
         real, intent(in) :: t, dt
             !! current time and step size
-        real, intent(inout) :: y(:)
+        real, allocatable, intent(inout) :: y(:, :, :, :)
             !! Solution vector at current time on input, at time+dt on output
-        real, intent(in), optional :: p(:)
+        real, allocatable, intent(in), optional :: p(:, :, :, :)
             !! user-supplied extra arguments (aka [p]arameters) to the RHS function
 
         integer :: irk
 
         ! copy current state into RK4 working memory
-        temp = y ! stores intermediate stage states
-        y_new = y ! accumulates stages into updated state
+        temp(:, :, :, :) = y ! stores intermediate stage states
+        y_new(:, :, :, :) = y ! accumulates stages into updated state
 
         ! Integrate one full RK4 step
         do irk = 1, 4
             call rhs(t, temp, dydt, p)
-            temp = y + b(irk) * dt * dydt
-            y_new = y_new + a(irk) * dt * dydt
+            temp(:, :, :, :) = y + b(irk) * dt * dydt
+            y_new(:, :, :, :) = y_new + a(irk) * dt * dydt
         end do
-        y = y_new
+        y(:, :, :, :) = y_new
 
     end subroutine rk4_step
 

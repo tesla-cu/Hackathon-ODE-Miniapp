@@ -7,8 +7,8 @@ module chemistry
 
     abstract interface
         subroutine time_derivative(tracers, dcdt, args)
-            real, intent(in) :: tracers(:), args(:)
-            real, intent(inout) :: dcdt(:)
+            real, allocatable, intent(in) :: tracers(:, :, :, :), args(:, :, :, :)
+            real, allocatable, intent(inout) :: dcdt(:, :, :, :)
         end subroutine time_derivative
     end interface
     procedure(time_derivative), pointer, protected :: compute_chemistry => null()
@@ -27,11 +27,11 @@ contains
 
             compute_chemistry => dcdt_carbonate
 
-        else if (model == 'NPZD') then
-            nscl = 4
-            nargs = 1
+        ! else if (model == 'NPZD') then
+        !     nscl = 4
+        !     nargs = 1
 
-            compute_chemistry => dcdt_npzd
+        !     compute_chemistry => dcdt_npzd
 
         else
             stop 'ERROR: chemistry model not recognized'
@@ -48,16 +48,18 @@ contains
         real :: b1, b2, b3, b4, b5, b6, b7
         integer :: ix, jy, kz, nx, ny, nz, nc
 
-        nx = size(c_3d, dim=0)
-        ny = size(c_3d, dim=1)
-        nz = size(c_3d, dim=2)
-        nc = size(c_3d, dim=2)
+        nx = size(c_3d, dim=1)
+        ny = size(c_3d, dim=2)
+        nz = size(c_3d, dim=3)
+        nc = size(c_3d, dim=4)
 
         do kz = 1, nz
             do jy = 1, ny
                 do ix = 1, nx
-                    associate(c => c_3d(ix, iy, iz, :), &
-                              args => p_3d(ix, iy, iz, :))
+                    associate(c => c_3d(ix, jy, kz, :), &
+                              args => p_3d(ix, jy, kz, :), &
+                              dcdt => dcdt_3d(ix, jy, kz, :) &
+                              )
 
                         T = args(1) + 273.15
                         S = args(2)
@@ -71,7 +73,7 @@ contains
                                 + log(1.0 - 0.001005 * S) &
                             ) * (1.0e6)
                         K2s = exp( &
-                                (-3351.6106 / T - 9.226508)
+                                (-3351.6106 / T - 9.226508) &
                                 - 0.2005743 * log(T) &
                                 + (-23.9722 / T - 0.106901773) * (S**0.5) &
                                 + 0.1130822 * S &
@@ -79,9 +81,9 @@ contains
                                 + log(1.0 - 0.001005 * S) &
                             ) * (1.0e6)
                         Kw = exp( &
-                                (-13847.26 / T + 148.96502)
+                                (-13847.26 / T + 148.96502) &
                                 - 23.65218 * log(T) &
-                                + (118.67 / T - 5.977 + 1.0495 * log(T)) * (S**0.5)
+                                + (118.67 / T - 5.977 + 1.0495 * log(T)) * (S**0.5) &
                                 - 0.01615 * S &
                             ) * (1.0e6) !(DoE, 1994)
                         Kb = exp( &

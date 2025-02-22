@@ -105,15 +105,16 @@ program chem_ode_miniapp
 
     ! Finalization -------------------------------------------------------------
     close (save_unit)
-    call finalize_integrator()
+    call finalize_pprk4()
     deallocate (tracers, args, y_0, p_0)
 
 contains ! ---------------------------------------------------------------------
 
     subroutine rhs_wrapped(t, y, ydot, p)
-        real, intent(in) :: t, y(:, :, :, :)
-        real, intent(inout) :: ydot(:, :, :, :)
-        real, intent(in), optional :: p(:, :, :, :)
+        real, intent(in) :: t
+        real, allocatable, intent(in) :: y(:, :, :, :)
+        real, allocatable, intent(inout) :: ydot(:, :, :, :)
+        real, allocatable, intent(in), optional :: p(:, :, :, :)
         associate (t => t); end associate ! suppress unused dummy argument warning
         call compute_chemistry(y, ydot, p)
     end subroutine rhs_wrapped

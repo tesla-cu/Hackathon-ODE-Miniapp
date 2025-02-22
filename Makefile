@@ -3,8 +3,8 @@ FC := ftn # OR mpif90, etc.
 SRCDIR := src
 BUILDDIR := build
 
-SOURCES := src/pprk4.f90 src/ncarles_rkc.f90 src/miniapp_rkc.f90 src/integrators.f90 \
-src/chemistry.f90 src/chem_ode_miniapp.f90
+SOURCES := src/pprk4.f90 src/chemistry.f90 src/chem_ode_miniapp.f90
+# src/ncarles_rkc.f90 src/miniapp_rkc.f90 src/integrators.f90
 
 # Generate corresponding object file paths in the build directory
 OBJECTS := $(patsubst $(SRCDIR)/%.f90, $(BUILDDIR)/%.o, $(SOURCES))
