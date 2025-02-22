@@ -1,57 +1,66 @@
-module miniapp_rkc
-    !! The error-controlled adaptive Runge-Kutta-Chebyshev integrator, a
-    !! stabilized explicit RK scheme of 2nd order accuracy and variable stages.
-    !!
-    !! This particular implementation is a refactored and somewhat modified
-    !! version of RKC compared to what was added to NCAR-LES by Kat Smith and
-    !! Kyle Niemeyer. For a version of RKC faithful to the NCAR-LES implementation,
-    !! see the `ncarles_rkc` module.
+module rkc_integrator
+!< The error-controlled adaptive Runge-Kutta-Chebyshev integrator, a
+!< stabilized explicit RK scheme of 2nd order accuracy and variable stages.
+!<
+!< This particular implementation is a refactored and significantly modified
+!< version of RKC compared to what was added to NCAR-LES by Kat Smith and
+!< Kyle Niemeyer.
+    use integrand, only: integrand_type
     implicit none
     private
-    public :: initialize_rkc, rkc_integrate, rkc_inplace_step
+    public :: rkc_type
 
     real, parameter :: UROUND = epsilon(1.0)
-    real :: rel_tol, abs_tol
-    integer :: s_max
 
-    abstract interface
-        subroutine time_derivative(t, y, ydot, p)
-            real, intent(in) :: t, y(:)
-            real, intent(inout) :: ydot(:)
-            real, intent(in), optional :: p(:)
-        end subroutine time_derivative
-    end interface
-    procedure(time_derivative), pointer :: rhs
+    type :: rkc_type
+        real :: rtol, atol
+        integer :: s_max
+        class(integrand_type), allocatable :: stage(:)  !< Intermediate stage update results
+        class(integrand_type), allocatable :: work(:)   !< Work objects
+    contains
+        ! public methods
+        procedure, pass(self) :: integrate => rkc_integrate
+        procedure, pass(self) :: step => rkc_inplace_step
+        ! public methods
+        procedure, pass(self) :: initialize => initialize_rkc
+        procedure, pass(self) :: finalize => null()
+    end type rkc_type
 
 contains
 
-    subroutine initialize_rkc(dydt, rtol, atol)
-        !! Initialize the RKC integrator's working memory and RHS function pointer.
-        procedure(time_derivative) :: dydt
-            !! User-supplied RHS term of ODE, dy/dt = RHS, with signature
-            !! `subroutine dydt(t, y, ydot, p)`
-        real, intent(in), optional :: rtol
-            !! relative tolerance value
-        real, intent(in), optional :: atol
-            !! absolute tolerance value
+    subroutine initialize_rkc(self, system, rtol, atol)
+        !! Initialize the RKC integrator's working memory and RHS integrand
+        type(rkc_type) :: self !< this instantiated RKC solver object
+        class(integrand_type) :: system !< the system of ODEs to be solved
+        real, intent(in), optional :: rtol !< relative tolerance value
+        real, intent(in), optional :: atol !< absolute tolerance value
 
-        rhs => dydt
-
-        rel_tol = 1.0e-6; if (present(rtol)) rel_tol = rtol
-        abs_tol = 1.0e-10; if (present(atol)) abs_tol = atol
-        ! maximum number of RKC stages based on rel_tol
-        s_max = max(2, nint(sqrt(0.1 * rel_tol / UROUND)))
+        self%rtol = 1.0e-6; if (present(rtol)) self%rtol = rtol
+        self%atol = 1.0e-10; if (present(atol)) self%atol = atol
+        ! maximum number of RKC stages based on rtol
+        s_max = max(2, nint(sqrt(0.1 * self%rtol / UROUND)))
 
     end subroutine initialize_rkc
 
-    subroutine rkc_inplace_step(t, dt, y, p)
+    pure subroutine rkc_inplace_step(t, dt, y, p)
         real, intent(in) :: t, dt
-        real, intent(inout) :: y(:)
-        real, intent(in), optional :: p(:)
+        real, contiguous, intent(inout) :: y(:, :, :, :)
+        real, contiguous, intent(in), optional :: p(:, :, :, :)
         real :: ydot(size(y))  ! initial derivative at time `t`
         call rhs(t, y, ydot, p)
         y(:) = rkc_step(t, dt, s_max, y, ydot, p)
     end subroutine rkc_inplace_step
+
+    pure function amaxabs(a1, a2)
+        !! Element-wise maximum of the absolute values of two arrays
+        real, intent(in) :: a1(:)
+        real, intent(in) :: a2(size(a1))
+        real :: amaxabs(size(a1))
+        integer :: i
+        do i = 1, size(a1)
+            amaxabs(i) = max(abs(a1(i)), abs(a2(i)))
+        end do
+    end function amaxabs
 
     subroutine rkc_integrate(t_i, t_f, y, p)
         !! Integrate forward in time using adaptive Runge-Kutta-Chebyshev as an
@@ -65,50 +74,37 @@ contains
         real, intent(in), optional :: p(:)
             !! optional parameters to pass on to rhs subroutine
 
-        ! work arrays
-        real, dimension(:), allocatable :: y_end, ydot, vtemp1, vtemp2, eigenv
-        ! internal work arrays: not all may be necessary, haven't figured out minimum
-        ! needed working memory. `eigenv` used to be stored in work(4:)
-
+        real, dimension(size(y)) :: y_end, ydot, vtemp1, vtemp2, eigenv ! internal work arrays
         real :: err_old, h_old, h_n, rho
-        ! these variables used to be stored in work(0:3)
         integer :: ny, nstep, s, i
         real :: t_rkc, hmax, hmin, err, est, adapt, temp1, temp2
 
-        ! Initialize progress variables
-        allocate (y_end, ydot, vtemp1, vtemp2, eigenv, mold=y)
-        ny = size(y)
-
         t_rkc = t_i
         nstep = 0
+        ny = size(y)
 
         ! Initialize integration limiters
-        hmax = abs(t_f - t_i) ! maximum timestep size
-        hmin = 10.0 * UROUND * max(abs(t_i), hmax) ! minimum timestep size
-        call rhs(t_rkc, y, ydot, p) ! calculate RHS for initial y input
-        eigenv = ydot ! initial estimate of eigenvector
-        rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+        hmax = abs(t_f - t_i)                       ! maximum timestep size
+        hmin = 10.0 * UROUND * max(abs(t_i), hmax)  ! minimum timestep size
+        call rhs(t_rkc, y, ydot, p)                 ! calculate RHS for initial y input
+        eigenv = ydot                               ! initial estimate of eigenvector
+        rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p) ! also updates eigenv!!
         err_old = 0.0
         h_old = 0.0
 
-        ! --> Estimate the timestep size, h_n
-        h_n = hmax
-        if (rho * h_n > 1.0) h_n = 1.0 / rho
-        h_n = max(h_n, hmin)
-
-        vtemp1 = y + h_n * ydot
-        call rhs(t_rkc, vtemp1, vtemp2, p)
-
-        vtemp1 = (vtemp2 - ydot) / (abs_tol + rel_tol * abs(y))
-        err = h_n * sqrt(sum(vtemp1**2) / real(ny))
-        h_n = min(max(0.1 * h_n / sqrt(err), hmin), hmax)
-        ! <-- end of estimate h_n
+        ! Estimate the timestep size, h_n
+        h_n = min(max(1.0 / rho, hmin), hmax)                   ! ensure hmin < h < hmax
+        vtemp1 = y + h_n * ydot                                 ! simple step forward in time
+        call rhs(t_rkc, vtemp1, vtemp2, p)                      ! vtemp2 now gradient at forward step
+        vtemp1 = (vtemp2 - ydot) / (atol + rtol * abs(y)) ! vtemp1 now simple error
+        err = h_n * sqrt(sum(vtemp1**2) / real(ny))             ! err is normalized RMS
+        h_n = min(max(0.1 * h_n / sqrt(err), hmin), hmax)       ! ensure hmin < h < hmax
 
         ! compute number of RKC stages for first step based on h_n estimate
         s = 1 + nint(sqrt(1.54 * h_n * rho + 1.0))
         if (s > s_max) then ! correct h_n
             s = s_max
-            h_n = real((s**2 - 1) / (1.54 * rho))
+            h_n = real(s**2 - 1) / (1.54 * rho)
         end if
 
         ! INTEGRATE TO END TIME
@@ -116,17 +112,13 @@ contains
             ! perform tentative time step
             y_end = rkc_step(t_rkc, h_n, s, y, ydot, p)
 
-            ! calculate F_np1 with tenative y_np1
+            ! calculate F_np1 with tentative y_np1
             call rhs(t_rkc, y_end, vtemp1, p)
 
             ! estimate error
-            err = 0.0
-            do i = 1, ny
-                est = 0.8 * (y(i) - y_end(i)) + 0.4 * h_n * (ydot(i) + vtemp1(i))
-                est = est / (abs_tol + rel_tol * max(abs(y_end(i)), abs(y(i))))
-                err = err + est**2
-            end do
-            err = sqrt(err / real(ny))
+            vtemp2 = 0.8 * (y - y_end) + 0.4 * h_n * (ydot + vtemp1)
+            vtemp2 = vtemp2 / (atol + rtol * amaxabs(y_end, y))
+            err = sqrt(sum(vtemp2**2) / real(ny))
 
             ! If error too large, reject step and do not update t_rkc, etc.
             if (err >= 1.0) then
@@ -196,66 +188,76 @@ contains
             !! Time derivative of solution, dy/dt = F(y)
         real, intent(inout) :: v(:)
             !! Estimate of ODE system eigenvalues
-        real, intent(out) :: Fv(:)
-            !! Time derivative of eigenalues, dv/dt = F(v)
+        real, intent(inout) :: Fv(:)
+            !! Work array for time derivative of eigenalues, dv/dt = F(v),
+            !! actual values not needed on input or output
         real, intent(in), optional :: p(:)
-            !! optional parameters to pass on to rhs subroutine
+            !! optional parameters to pass on to rhs() subroutine
         real :: rkc_spec_rad
             !! function result
 
         integer, parameter :: itmax = 50
-        integer :: iter, ind
-        real :: small, y_rms, v_rms, dF_rms, dy_norm, sigma0, sigma1
+        integer :: iter, ind, ny
+        real :: small, y_rms, v_rms, dF_rms, dy_norm, sigma0, sigma1, tol, tol2
 
         small = 1.0 / hmax
+        ny = size(y)
 
         y_rms = sqrt(sum(y**2))
+        tol = sqrt(ny * UROUND * maxval(y**2)) ! floating-point roundoff near 0.0 for y_rms
         v_rms = sqrt(sum(v**2))
-        if ((y_rms > 0.0) .and. (v_rms > 0.0)) then
+        tol2 = sqrt(ny * UROUND * maxval(v**2)) ! floating-point roundoff near 0.0 for v_rms
+
+        ! dy_norm is the normalization for (v - y) and (Fv - F)
+        if ((y_rms > tol) .and. (v_rms > tol2)) then
             dy_norm = y_rms * sqrt(UROUND)
-            v = y + v * (dy_norm / v_rms)
-        elseif (y_rms > 0.0) then
+            v(:) = y + v * (dy_norm / v_rms)
+        elseif (y_rms > tol) then
+            print *, 'RKC TESTING COMMENT: hit v_rms < tol branch inside rkc_spec_rad'
             dy_norm = y_rms * sqrt(UROUND)
-            v = y * (1.0 + sqrt(UROUND))
-        elseif (v_rms > 0.0) then
+            v(:) = y * (1.0 + sqrt(UROUND))
+        elseif (v_rms > tol2) then
+            print *, 'RKC TESTING COMMENT: hit y_rms < tol branch inside rkc_spec_rad'
             dy_norm = UROUND
-            v = v * (dy_norm / v_rms)
+            v(:) = v * (dy_norm / v_rms)
         else
+            print *, 'RKC TESTING COMMENT: hit v_rms, y_rms < tol branch inside rkc_spec_rad'
             dy_norm = UROUND
-            v = UROUND
+            v(:) = UROUND
         end if
 
-        ! now iterate using nonlinear power method
-        sigma1 = 0.0
+        ! Now iterate using nonlinear power method
+        call rhs(t_rkc, v, Fv, p)
+        dF_rms = sqrt(sum((Fv - F)**2))
+        sigma1 = dF_rms / dy_norm
+
         do iter = 1, itmax
             call rhs(t_rkc, v, Fv, p)
             dF_rms = sqrt(sum((Fv - F)**2))
             sigma0 = sigma1
             sigma1 = dF_rms / dy_norm
             rkc_spec_rad = 1.2 * sigma1
-            if ((iter >= 2) .and. (abs(sigma1 - sigma0) <= (max(sigma1, small) * 0.01))) then
-                v = v - y
+            if (abs(sigma1 - sigma0) < (0.01 * max(sigma1, small))) then
+                v(:) = v - y
                 return ! immediately terminate the subroutine
             end if
 
-            if (dF_rms > 0.0) then
-                v = y + ((Fv - F) * (dy_norm / dF_rms))
+            tol = sqrt(ny * UROUND * maxval((Fv - F)**2)) ! FP tolerance for dF_rms
+            if (dF_rms > tol) then
+                v(:) = y + ((Fv - F) * (dy_norm / dF_rms))
             else
                 ind = mod(iter, size(y))
-                v(ind) = y(ind) - (v(ind) - y(ind))
-                ! this part is from original RKC code, but doesn't make sense to Colin.
-                ! Based on RKC paper, what is wanted is v(ind) = -v(ind). If we
-                ! had infinite precision, then this would set v(ind) = 2*y(ind) - v(ind).
-                print *, 'RKC TESTING: reached dF_rms == 0 branch inside rkc_spec_rad'
+                v(ind) = -v(ind)
+                print *, 'RKC TESTING COMMENT: hit dF_rms < tol branch inside rkc_spec_rad'
             end if
         end do
 
         ! if you get to the end of the loop without hitting the alternate return ...
-        print *, 'RKC WARNING: rkc_spec_rad failed to converge!'
+        print *, 'RKC NON-BLOCKING ERROR: rkc_spec_rad failed to converge!'
 
     end function rkc_spec_rad
 
-    function rkc_step(t_rkc, h, s, y_0, F_0, p) result(y_j)
+    pure function rkc_step(t_rkc, h, s, y_0, F_0, p) result(y_j)
         !! Function to take a single RKC integration step of variable stage count.
         real, intent(in) :: t_rkc
             !! The current time. Here for generic integrator compatibility.
@@ -265,15 +267,15 @@ contains
             !! number of stages to compute
         real, intent(in) :: y_0(:)
             !! The current solution
-        real, intent(in) :: F_0(:)
+        real, intent(in) :: F_0(size(y_0))
             !! The time derivative of current solution, dy/dt = F(y)
         real, intent(in), optional :: p(:)
             !! optional parameters to pass on to rhs subroutine
-        real, allocatable :: y_j(:)
+        real :: y_j(size(y_0))
             !! The solution at the end of the step
 
         ! internal work memory
-        real, dimension(:), allocatable :: y_jm1, y_jm2
+        real, dimension(size(y_0)) :: y_jm1, y_jm2
 
         ! variable RK stage coefficients, and related variables
         real :: w0, temp1, temp2, arg, w1, b_jm1, b_jm2, mu_t
@@ -282,8 +284,6 @@ contains
 
         ! loop index
         integer :: j
-
-        allocate (y_j, y_jm1, y_jm2, mold=y_0)
 
         w0 = 1.0 + 2.0 / (13.0 * real(s**2))
         temp1 = w0**2 - 1.0
@@ -296,8 +296,8 @@ contains
 
         ! calculate y_1
         mu_t = w1 * b_jm1
-        y_jm2(:) = y_0                     
-        y_jm1(:) = y_0 + (mu_t * h * F_0)  
+        y_jm2(:) = y_0
+        y_jm1(:) = y_0 + (mu_t * h * F_0)
 
         c_jm2 = 0.0
         c_jm1 = mu_t
@@ -343,4 +343,4 @@ contains
 
     end function rkc_step
 
-end module miniapp_rkc
+end module rkc_integrator

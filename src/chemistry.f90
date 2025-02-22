@@ -1,47 +1,11 @@
 module chemistry
     implicit none
-    private
-    public :: initialize_chemistry, compute_chemistry
-
-    real, parameter :: SEC_PER_DAY = 86400.0
-
-    abstract interface
-        subroutine time_derivative(tracers, dcdt, args)
-            real, allocatable, intent(in) :: tracers(:, :, :, :), args(:, :, :, :)
-            real, allocatable, intent(inout) :: dcdt(:, :, :, :)
-        end subroutine time_derivative
-    end interface
-    procedure(time_derivative), pointer, protected :: compute_chemistry => null()
 
 contains
 
-    subroutine initialize_chemistry(model, nscl, nargs)
-        implicit none
-
-        character(len=*), intent(in) :: model
-        integer, intent(out) :: nscl, nargs
-
-        if (model == 'carbonate') then
-            nscl = 6
-            nargs = 2
-
-            compute_chemistry => dcdt_carbonate
-
-        ! else if (model == 'NPZD') then
-        !     nscl = 4
-        !     nargs = 1
-
-        !     compute_chemistry => dcdt_npzd
-
-        else
-            stop 'ERROR: chemistry model not recognized'
-        end if
-
-    end subroutine initialize_chemistry
-
-    subroutine dcdt_carbonate(c_3d, dcdt_3d, p_3d)
-        real, allocatable, intent(in) :: c_3d(:, :, :, :), p_3d(:, :, :, :)
-        real, allocatable, intent(inout) :: dcdt_3d(:, :, :, :)
+    pure subroutine compute_chemistry(c_3d, dcdt_3d, p_3d)
+        real, contiguous, intent(in) :: c_3d(:, :, :, :), p_3d(:, :, :, :)
+        real, contiguous, intent(inout) :: dcdt_3d(:, :, :, :)
 
         real :: K1s, K2s, Kw, Kb, Rgas, S, T, H_qss !, logT, invT, sqrtS
         real :: a1, a2, a3, a4, a5, a6, a7
@@ -137,54 +101,6 @@ contains
             end do
         end do
 
-    end subroutine dcdt_carbonate
-
-    subroutine dcdt_npzd(tracers, dcdt, args)
-        ! NPZ from P Franks 1986 recommended by Nikki Lovenduski
-        ! Parameters
-        real, intent(in) :: tracers(:), args(:)
-        real, intent(inout) :: dcdt(:)
-        real :: vp, intensity, temp, light_intensity
-        real :: kn = 1.0        ! umolN/l
-        real :: rm = 1.0        ! 1/d
-        real :: death_rate_zoo = 0.2    ! 1/d
-        real :: lambda = 0.2    ! umolN/l
-        real :: death_rate_phyto = 0.1  ! 1/d
-        real :: alpha = 0.3
-        real :: beta = 0.6
-        real :: phi = 0.4 ! 1/d
-        real :: r_npzd = 0.15  ! 1/d
-        real :: a_npz = 0.6 ! 1/d
-        real :: b_npz = 1.066
-        real :: c_npz = 1.0
-        real :: P, Z, N, D
-
-        P = tracers(1)
-        Z = tracers(2)
-        N = tracers(3)
-        D = tracers(4)
-        temp = args(1)
-
-        light_intensity = 1.0
-        !intensity = rm * P * lambda !Mayzaud-Poulet (1/d)
-        intensity = rm !Ivlev (1/d)
-        vp = (a_npz * b_npz**(c_npz * temp)) !from Eppley 1972 (1/d)
-
-        dcdt(1) = vp * (N / (kn + N)) * light_intensity * P &
-                  - intensity * (1.0 - exp(-lambda * P)) * Z &
-                  - death_rate_phyto * P - r_npzd * P
-
-        dcdt(2) = beta * intensity * (1.0 - exp(-lambda * P)) * Z - death_rate_zoo * Z
-
-        dcdt(3) = -vp * (N / (kn + N)) * light_intensity * P &
-                  + alpha * intensity * (1.0 - exp(-lambda * P)) * Z + death_rate_phyto * P &
-                  + death_rate_zoo * Z + phi * D
-
-        dcdt(4) = r_npzd * P + (1 - alpha - beta) * intensity * (1.0 - exp(-lambda * P)) * Z &
-                  - phi * D
-
-        dcdt = dcdt / SEC_PER_DAY
-
-    end subroutine dcdt_npzd
+    end subroutine compute_chemistry
 
 end module chemistry

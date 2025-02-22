@@ -2,9 +2,8 @@ program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     !!
 
-    use chemistry, only: initialize_chemistry, compute_chemistry
-    ! use integrators, only: initialize_integrator, finalize_integrator, &
-    !                        solve_interval
+    use chemistry, only: compute_chemistry
+    use pprk4, only: initialize_pprk4, pprk4_integrate, finalize_pprk4
     use pprk4, only: initialize_pprk4, pprk4_integrate, finalize_pprk4
 
     implicit none ! ------------------------------------------------------------
