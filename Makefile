@@ -1,5 +1,5 @@
-COMPILER := intel
-FC := ifx # OR mpif90
+COMPILER := cray
+FC := ftn # OR mpif90, etc.
 SRCDIR := src
 BUILDDIR := build
 
@@ -13,7 +13,61 @@ OBJECTS := $(patsubst $(SRCDIR)/%.f90, $(BUILDDIR)/%.o, $(SOURCES))
 EXECUTABLE := test/miniapp.exe
 
 # ----------------------------------------------------------------------------------------
-ifeq ($(COMPILER),gnu)
+ifeq ($(COMPILER),cray)
+
+FFLAGS := -s default64 -f PIC -ef -J ./build
+LDFLAGS := # I don't think anything is necessary here
+
+# USE THESE FOR ACTUAL DEBUGGING
+SYNTAX := -g # NO SYNTAX-ONLY OPTION!?
+DBG1 := -O2 -G1 -m3  # O2 placed after g1 and debug, otherwise they override O2 to O0
+DBG2 := -O1 -G1 -Ktrap=fp -eD -h fp1,scalar1,vector1,add_paren
+DBG3 := -O0 -G0 -Ktrap=fp -eD -m1 -h add_paren # -O0 implies fp0, scalar0, vector0, etc.
+
+# USE THESE FOR CODE PROFILING
+# -- Very unoptimized floating-point operations.
+#    Every way in which you can force Cray to do math slower is turned on
+OPT1 := -O0 -G0 -h add_paren # -O0 implies fp0, scalar0, vector0, etc.
+# -- "Normal" floating-point operations
+OPT2 := -O2 -G2 -eo
+# -- Very optimized FLOPs, any way in which you can trade accuracy for speed is turned on.
+OPT3 := -O2 -G2 -h scalar3,vector3,fp4 # fma on at fp1 or higher
+
+# USE THESE FOR MAXIMUM COMPILER OPTIMIZATION
+# -- Once O3 and ipo are turned on, I don't think you can use -g anymore.
+OPT4 := -O3 -eo
+OPT5 := -O3 -h aggress,scalar3,vector3,cache3,fp4
+
+else ifeq ($(COMPILER),intel)
+
+FFLAGS := -real-size 64 -extend-source 132 -fpic -stand f18 -module ./build\
+ -I"${MKLROOT}/include"
+# -march=core-avx2 is enabled on Derecho for AMD Epyc Milan CPUs
+LDFLAGS := -L${MKLROOT}/lib/intel64 -lmkl_rt -lpthread -lm -ldl
+
+# USE THESE FOR ACTUAL DEBUGGING
+SYNTAX := -syntax-only -warn all,errors -diag-error-limit=5
+DBG1 := -g2 -debug all -traceback -O2  # O2 placed after g1 and debug, otherwise they override O2 to O0
+DBG2 := -g2 -debug all -traceback -fpe-all=0 -warn nounused -check all,noarg_temp_created -fp-model=strict  # -g2 == -g
+DBG3 := -g3 -debug all -traceback -prec-div -fprotect-parens -fpe-all=0 -warn nounused -check all -fp-model=strict,source
+
+# USE THESE FOR CODE PROFILING
+# -- Very unoptimized floating-point operations.
+#    Every way in which you can force intel to do math slower is turned on
+OPT1 := -g -O2 -fp-model=strict,source -fprotect-parens -prec-div
+# -- "Normal" floating-point operations
+OPT2 := -g -O2
+# -- Very optimized FLOPs, any way in which you can trade accuracy for speed is turned on.
+OPT3 := -g -O2 -fp-model=fast=1 -fast-transcendentals -fma -no-prec-div -nostandard-realloc-lhs
+
+# USE THESE FOR MAXIMUM COMPILER OPTIMIZATION
+# -- Once O3 and ipo are turned on, I don't think you can use -g anymore.
+OPT4 := -O3 -ipo # -qopt-zmm-usage=high may help or hurt if added here
+OPT5 := -O3 -ipo -fast-transcendentals -no-prec-div -nostandard-realloc-lhs # -fimf-precision=high or link to MKL!
+# Other stuff: it's possible settings like -qopt-zmm-usage=high, and
+# -mcmodel=medium could help performance and/or avoid runtime memory errors.
+
+else ifeq ($(COMPILER),gnu)
 
 FFLAGS := -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fPIC -pipe -std=f2018 -J./build
 LDFLAGS := -lm
@@ -39,33 +93,6 @@ OPT2 := -g2 -O2 -ffast-math -fno-protect-parens
 # HARDCORE OPTIMIZATION
 OPT3 := -O3
 OPT4 := -O3 -ffast-math -fno-protect-parens
-
-else ifeq ($(COMPILER),intel)
-
-FFLAGS := -real-size 64 -extend-source 132 -fpic -stand f18 -module ./build # -xCORE-AVX512 AVX512 setting highly recommended for Frontera and Stampede3
-LDFLAGS := -limf -lm
-
-# USE THESE FOR ACTUAL DEBUGGING
-SYNTAX := -syntax-only -warn all,errors -diag-error-limit=5
-DBG1 := -g2 -debug all -traceback -O2  # O2 placed after g1 and debug, otherwise they override O2 to O0
-DBG2 := -g2 -debug all -traceback -fpe-all=0 -warn nounused -check all,noarg_temp_created -fp-model=strict  # -g2 == -g
-DBG3 := -g3 -debug all -traceback -prec-div -fprotect-parens -fpe-all=0 -warn nounused -check all -fp-model=strict,source
-
-# USE THESE FOR CODE PROFILING
-# -- Very unoptimized floating-point operations.
-#    Every way in which you can force intel to do math slower is turned on
-OPT1 := -g -O2 -fp-model=strict,source -fprotect-parens -prec-div
-# -- "Normal" floating-point operations
-OPT2 := -g -O2
-# -- Very optimized FLOPs, any way in which you can trade accuracy for speed is turned on.
-OPT3 := -g -O2 -fp-model=fast=1 -fast-transcendentals -fma -no-prec-div -nostandard-realloc-lhs
-
-# USE THESE FOR MAXIMUM COMPILER OPTIMIZATION
-# -- Once O3 and ipo are turned on, I don't think you can use -g anymore.
-OPT4 := -O3 -ipo # -qopt-zmm-usage=high may help or hurt if added here
-OPT5 := -O3 -ipo -fast-transcendentals -no-prec-div -nostandard-realloc-lhs
-# Other stuff: it's possible settings like -qopt-zmm-usage=high, and
-# -mcmodel=medium could help performance and/or avoid runtime memory errors.
 
 endif
 
