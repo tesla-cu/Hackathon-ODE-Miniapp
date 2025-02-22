@@ -1,7 +1,7 @@
 !> Program time integration parameters
 &params
-    integrator = 'rkc',
-        !! ODE solver choice {'pprk4', 'rkc', 'rkc77'}
+    integrator = 'pprk4',
+        !! Only the one solver is currently available in this branch
     start_time = 0.0,
         !! start time of simulation [s]
     end_time = 1.0,

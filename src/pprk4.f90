@@ -9,15 +9,15 @@ module pprk4
     real, parameter :: a(4) = [1./6., 1./3., 1./3., 1./6.]
     real, parameter :: b(4) = [0.5, 0.5, 1.0, 0.0]
     real, parameter :: rtol = 10.0 * epsilon(1.0)
-    real, allocatable :: temp(:), y_new(:), dydt(:)
+    real, allocatable :: temp(:, :, :, :), y_new(:, :, :, :), dydt(:, :, :, :)
     real :: dt_old
 
     procedure(time_derivative), pointer :: rhs
     abstract interface
         subroutine time_derivative(t, y, ydot, p)
-            real, intent(in) :: t, y(:)
-            real, intent(inout) :: ydot(:)
-            real, intent(in), optional :: p(:)
+            real, allocatable, intent(in) :: t, y(:, :, :, :)
+            real, allocatable, intent(inout) :: ydot(:, :, :, :)
+            real, allocatable, intent(in), optional :: p(:, :, :, :)
         end subroutine time_derivative
     end interface
 
@@ -27,14 +27,14 @@ contains
         !! Initialize the RK4 integrator's working memory and minimum timestep
         !! size (optional).
 
-        real, intent(in) :: user_y(:)
+        real, intent(in) :: user_y(:, :, :, :)
             !! User-supplied solution vector
         procedure(time_derivative) :: user_rhs
             !! User-supplied RHS term of ODE, dy/dt = RHS
         real, intent(in), optional :: init_dt
             !! Optional initial timestep size
 
-        allocate (temp, y_new, dydt, source=user_y) ! same as allocation by assignment
+        allocate (temp, y_new, dydt, mold=user_y)
         rhs => user_rhs
         dt_old = rtol; if (present(init_dt)) dt_old = init_dt
 
@@ -45,10 +45,10 @@ contains
 
         real, intent(in) :: ti, tf
             !! the initial and final times over which to evolve the solution.
-        real, intent(inout) :: y(:)
+        real, intent(inout) :: y(:, :, :, :)
             !! Solution vector at initial time `ti` on input, and at final time
             !! `tf` on output.
-        real, intent(in), optional :: p(:)
+        real, intent(in), optional :: p(:, :, :, :)
             !! user-supplied extra arguments (aka [p]arameters) to the RHS function
 
         real :: t, dt
@@ -70,9 +70,9 @@ contains
 
         real, intent(inout) :: t, dt
             !! Current time of the solution on input, final time of RK4 step on output
-        real, intent(inout) :: y(:)
+        real, intent(inout) :: y(:, :, :, :)
             !! Solution vector at current time on input, at end of step on output
-        real, intent(in), optional :: p(:)
+        real, intent(in), optional :: p(:, :, :, :)
             !! user-supplied extra arguments (aka [p]arameters) to the RHS function
 
         real :: dt_new
@@ -81,18 +81,18 @@ contains
         ! take a step at largest-possible dt, trying multiple times if necessary
         do
             ! Integrate one full RK4 step
-            temp = y ! stores intermediate stage states
-            y_new = y ! accumulates updated state
+            temp(...) = y ! stores intermediate stage states
+            y_new(...) = y ! accumulates updated state
             do irk = 1, 4
                 call rhs(t, temp, dydt, p)
-                temp = y + b(irk) * dt * dydt
-                y_new = y_new + a(irk) * dt * dydt
+                temp(...) = y + b(irk) * dt * dydt
+                y_new(...) = y_new + a(irk) * dt * dydt
             end do
 
             ! check positivity of solution
             if (minval(y_new) > 0.0) then
                 ! end the loop
-                y = y_new
+                y(...) = y_new
                 exit
             else
                 ! redo the step with dt = 0.5 * dt

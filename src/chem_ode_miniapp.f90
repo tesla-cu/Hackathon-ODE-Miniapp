@@ -3,8 +3,9 @@ program chem_ode_miniapp
     !!
 
     use chemistry, only: initialize_chemistry, compute_chemistry
-    use integrators, only: initialize_integrator, finalize_integrator, &
-                           solve_interval
+    ! use integrators, only: initialize_integrator, finalize_integrator, &
+    !                        solve_interval
+    use pprk4, only: initialize_pprk4, pprk4_integrate, finalize_pprk4
 
     implicit none ! ------------------------------------------------------------
 
@@ -26,9 +27,9 @@ program chem_ode_miniapp
     integer :: nt, save_unit, nml_unit
     integer :: ix, jy, kz
 
-    real, allocatable :: tracers(:, :, :, :), y_0(:), y(:)
+    real, allocatable :: tracers(:, :, :, :), y_0(:)
         !! 3D reacting scalars state vector and 0D initial condition
-    real, allocatable :: args(:, :, :, :), p_0(:), p(:)
+    real, allocatable :: args(:, :, :, :), p_0(:)
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
         !! and it's 0D initial condition
 
@@ -51,8 +52,8 @@ program chem_ode_miniapp
     ! z-direction is how NCAR-LES does it currently. This is sure
     ! to be inefficient and should be changed as part of testing.
     ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
-    allocate (tracers(nx(1), nx(2), nscl, nx(3)), y_0(nscl), y(nscl))
-    allocate (args(nx(1), nx(2), nargs, nx(3)), p_0(nargs), p(nargs))
+    allocate (tracers(nx(1), nx(2), nx(3), nscl), y_0(nscl))
+    allocate (args(nx(1), nx(2), nx(3), nargs), p_0(nargs))
 
     ! Read in the chemical initial condition from the input file
     if (model == 'carbonate') then
@@ -69,8 +70,8 @@ program chem_ode_miniapp
     do kz = 1, nx(3)
         do jy = 1, nx(2)
             do ix = 1, nx(1)
-                tracers(ix, jy, :, kz) = y_0
-                args(ix, jy, :, kz) = p_0
+                tracers(ix, jy, kz, :) = y_0
+                args(ix, jy, kz, :) = p_0
             end do
         end do
     end do
@@ -78,29 +79,21 @@ program chem_ode_miniapp
     close (nml_unit)
 
     ! Initialize the ODE solver, which associates the `solve_interval` pointer
-    print *, 'integrator = ', integrator
-    call initialize_integrator(integrator, rhs_wrapped, y_0, 1e-8, 1e-6, 1e-10)
+    ! print *, 'integrator = ', integrator
+    call initialize_pprk4(tracers, rhs_wrapped, init_dt=1e-8)
 
     ! Open file for saving tracer history
     open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
 
     ! Save initial conditions
+    print *, 'saving initial condition'
     call save_tracers(time_in_days=.true.)
 
     ! Time integration loop ----------------------------------------------------
-    nt = 0
+    nt = 1
     do while (time < end_time)
 
-        do kz = 1, nx(3)
-            do jy = 1, nx(2)
-                do ix = 1, nx(1)
-                    y = tracers(ix, jy, :, kz)
-                    p = args(ix, jy, :, kz)
-                    call solve_interval(time, time + dt_save, y, p)
-                    tracers(ix, jy, :, kz) = y
-                end do
-            end do
-        end do
+        call pprk4_integrate(time, time + dt_save, tracers, args)
 
         time = time + dt_save
 
@@ -113,14 +106,14 @@ program chem_ode_miniapp
     ! Finalization -------------------------------------------------------------
     close (save_unit)
     call finalize_integrator()
-    deallocate (tracers, args, y_0, y, p_0, p)
+    deallocate (tracers, args, y_0, p_0)
 
 contains ! ---------------------------------------------------------------------
 
     subroutine rhs_wrapped(t, y, ydot, p)
-        real, intent(in) :: t, y(:)
-        real, intent(inout) :: ydot(:)
-        real, intent(in), optional :: p(:)
+        real, intent(in) :: t, y(:, :, :, :)
+        real, intent(inout) :: ydot(:, :, :, :)
+        real, intent(in), optional :: p(:, :, :, :)
         associate (t => t); end associate ! suppress unused dummy argument warning
         call compute_chemistry(y, ydot, p)
     end subroutine rhs_wrapped
@@ -144,7 +137,7 @@ contains ! ---------------------------------------------------------------------
         write (str_nscl, '(I0)') nscl + 1 ! +1 for time
         fmt = '('//trim(str_nscl)//'ES15.5)'
 
-        write (save_unit, fmt) io_time, tracers(1, 1, :, 1)
+        write (save_unit, fmt) io_time, tracers(1, 1, 1, :)
     end subroutine save_tracers
 
 end program chem_ode_miniapp
