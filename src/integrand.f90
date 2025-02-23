@@ -19,131 +19,148 @@ module integrand
 
     implicit none
     private
-    public :: integrand_type
+    public :: integrand_type, IK, RK
 
     integer, parameter :: IK = kind(1), RK = kind(1.0) ! default integer and real for now
 
     type, abstract :: integrand_type
+    private
     !< Abstract type for a system of ODEs of variable size and shape
     contains
         ! public deferred procedures that concrete integrand-field must implement
-        procedure(problem_dimension), pass(self), deferred, public :: dimension !< Return integrand dimension.
+        procedure(integrand_dimension), pass(self), deferred, public :: size !< Return integrand size.
+        procedure(integrand_state), pass(self), deferred, public :: state !< Return integrand state array.
         procedure(time_derivative), pass(self), deferred, public :: d_dt !< Time derivative, residuals.
 
         ! operators
-        procedure(local_error_operator), pass(lhs), deferred, public :: local_error !< `||integrand - integrand||` operator.
-        generic, public :: operator(.lterror.) => local_error !< Estimate local truncation error.
+        ! procedure(local_error_operator), pass(lhs), deferred :: local_error !< `||integrand - integrand||` operator.
+        ! generic, public :: operator(.lterror.) => local_error !< Estimate local truncation error.
         ! +
-        procedure(symmetric_operator), pass(lhs), deferred, public :: integrand_add_integrand !< `+` operator.
-        procedure(integrand_op_real), pass(lhs), deferred, public :: integrand_add_real      !< `+ real` operator.
-        procedure(real_op_integrand), pass(rhs), deferred, public :: real_add_integrand      !< `real +` operator.
-        generic, public :: operator(+) => integrand_add_integrand, &
-            integrand_add_real, &
-            real_add_integrand !< Overloading `+` operator.
+        procedure(symmetric_operator), pass(lhs), deferred :: integrand_add_integrand !< `+` operator.
+        procedure(integrand_op_real), pass(lhs), deferred :: integrand_add_real      !< `+ real` operator.
+        procedure(real_op_integrand), pass(rhs), deferred :: real_add_integrand      !< `real +` operator.
+        generic, public :: operator(+) => &
+            integrand_add_integrand, integrand_add_real, real_add_integrand !< Overloading `+` operator.
         ! *
-        procedure(symmetric_operator), pass(lhs), deferred, public :: integrand_multiply_integrand   !< `*` operator.
-        procedure(integrand_op_real), pass(lhs), deferred, public :: integrand_multiply_real        !< `* real` operator.
-        procedure(real_op_integrand), pass(rhs), deferred, public :: real_multiply_integrand        !< `real *` operator.
-        procedure(integrand_op_real_scalar), pass(lhs), deferred, public :: integrand_multiply_real_scalar !< `* real_scalar` operator.
-        procedure(real_scalar_op_integrand), pass(rhs), deferred, public :: real_scalar_multiply_integrand !< `real_scalar *` operator.
-        generic, public :: operator(*) => integrand_multiply_integrand, &
+        procedure(symmetric_operator), pass(lhs), deferred :: integrand_multiply_integrand   !< `*` operator.
+        procedure(integrand_op_real), pass(lhs), deferred :: integrand_multiply_real        !< `* real` operator.
+        procedure(real_op_integrand), pass(rhs), deferred :: real_multiply_integrand        !< `real *` operator.
+        procedure(integrand_op_real_scalar), pass(lhs), deferred :: integrand_multiply_real_scalar !< `* real_scalar` operator.
+        procedure(real_scalar_op_integrand), pass(rhs), deferred :: real_scalar_multiply_integrand !< `real_scalar *` operator.
+        generic, public :: operator(*) => &
+            integrand_multiply_integrand, &
             integrand_multiply_real, &
             real_multiply_integrand, &
             integrand_multiply_real_scalar, &
             real_scalar_multiply_integrand !< Overloading `*` operator.
         ! -
-        procedure(symmetric_operator), pass(lhs), deferred, public :: integrand_sub_integrand !< `-` operator.
-        procedure(integrand_op_real), pass(lhs), deferred, public :: integrand_sub_real      !< `- real` operator.
-        procedure(real_op_integrand), pass(rhs), deferred, public :: real_sub_integrand      !< `real -` operator.
-        generic, public :: operator(-) => integrand_sub_integrand, &
-            integrand_sub_real, &
-            real_sub_integrand !< Overloading `-` operator.
+        procedure(symmetric_operator), pass(lhs), deferred :: integrand_sub_integrand !< `-` operator.
+        procedure(integrand_op_real), pass(lhs), deferred :: integrand_sub_real      !< `- real` operator.
+        procedure(real_op_integrand), pass(rhs), deferred :: real_sub_integrand      !< `real -` operator.
+        generic, public :: operator(-) => &
+            integrand_sub_integrand, integrand_sub_real, real_sub_integrand !< Overloading `-` operator.
         ! =
-        procedure(assignment_integrand), pass(lhs), deferred, public :: assign_integrand !< `=` operator.
-        procedure(assignment_real), pass(lhs), deferred, public :: assign_real      !< `= real` operator.
-        generic, public :: assignment(=) => assign_integrand, assign_real !< Overloading `=` assignament.
+        procedure(symmetric_assignment), pass(lhs), deferred :: integrand_eq_integrand !< `=` operator.
+        procedure(assignment_from_real), pass(lhs), deferred :: integrand_eq_real      !< `= real` operator.
+        procedure(assignment_to_real), pass(lhs), deferred :: real_eq_integrand      !< `real =` operator.
+        generic, public :: assignment(=) => &
+            integrand_eq_integrand, integrand_eq_real, real_eq_integrand !< Overloading `=` assignament.
     end type integrand_type
 
     abstract interface
         !< Abstract type bound procedures necessary for implementing a concrete extension of [[integrand_type]].
 
-        pure function problem_dimension(self)
+        pure function integrand_dimension(self)
             !< Return integrand dimension.
             import :: integrand_type, IK
             class(integrand_type), intent(in) :: self !< Integrand.
-            integer(IK) :: problem_dimension !< Integrand dimension.
-        end function problem_dimension
+            integer(IK) :: integrand_dimension !< Integrand dimension.
+        end function integrand_dimension
+
+        pure function integrand_state(self)
+            !< Return integrand dimension.
+            import :: integrand_type, RK
+            class(integrand_type), intent(in) :: self !< Integrand.
+            real(RK), contiguous, pointer :: integrand_state(:) !< Integrand state.
+        end function integrand_state
 
         function time_derivative(self, t) result(dState_dt)
             !< Time derivative function of integrand class, i.e. the residuals function.
-            import :: integrand_type, RP
-            class(integrand_type), intent(in) :: self         !< Integrand field.
-            real(RP), intent(in), optional :: t            !< Time.
-            real(RP), allocatable :: dState_dt(:) !< Result of the time derivative function of integrand field.
+            import :: integrand_type, RK
+            class(integrand_type), intent(in) :: self !< Integrand field.
+            real(RK), intent(in), optional :: t !< Time.
+            real(RK), allocatable :: dState_dt(:) !< Result of the time derivative function of integrand field.
         end function time_derivative
 
         ! operators
         function local_error_operator(lhs, rhs) result(error)
             !< Estimate local truncation error between 2 solution approximations.
-            import :: integrand_type, RP
+            import :: integrand_type, RK
             class(integrand_type), intent(in) :: lhs   !< Left hand side.
             class(integrand_type), intent(in) :: rhs   !< Right hand side.
-            real(RP) :: error !< Error estimation.
+            real(RK) :: error !< Error estimation.
         end function local_error_operator
 
         pure function integrand_op_real(lhs, rhs) result(operator_result)
             !< Asymmetric type operator `integrand.op.real`.
-            import :: integrand_type, RP
+            import :: integrand_type, RK
             class(integrand_type), intent(in) :: lhs                !< Left hand side.
-            real(RP), intent(in) :: rhs(1:)            !< Right hand side.
-            real(RP), allocatable :: operator_result(:) !< Operator result.
+            real(RK), intent(in) :: rhs(1:)            !< Right hand side.
+            real(RK), allocatable :: operator_result(:) !< Operator result.
         end function integrand_op_real
 
         pure function real_op_integrand(lhs, rhs) result(operator_result)
             !< Asymmetric type operator `real.op.integrand`.
-            import :: integrand_type, RP
+            import :: integrand_type, RK
             class(integrand_type), intent(in) :: rhs                !< Right hand side.
-            real(RP), intent(in) :: lhs(1:)            !< Left hand side.
-            real(RP), allocatable :: operator_result(:) !< Operator result.
+            real(RK), intent(in) :: lhs(1:)            !< Left hand side.
+            real(RK), allocatable :: operator_result(:) !< Operator result.
         end function real_op_integrand
 
         pure function integrand_op_real_scalar(lhs, rhs) result(operator_result)
             !< Asymmetric type operator `integrand.op.real`.
-            import :: integrand_type, RP
-            class(integrand_type), intent(in) :: lhs                !< Left hand side.
-            real(RP), intent(in) :: rhs                !< Right hand side.
-            real(RP), allocatable :: operator_result(:) !< Operator result.
+            import :: integrand_type, RK
+            class(integrand_type), intent(in) :: lhs    !< Left hand side.
+            real(RK), intent(in) :: rhs                 !< Right hand side.
+            real(RK), allocatable :: operator_result(:) !< Operator result.
         end function integrand_op_real_scalar
 
         pure function real_scalar_op_integrand(lhs, rhs) result(operator_result)
             !< Asymmetric type operator `real.op.integrand`.
-            import :: integrand_type, RP
-            real(RP), intent(in) :: lhs                !< Left hand side.
+            import :: integrand_type, RK
+            real(RK), intent(in) :: lhs                !< Left hand side.
             class(integrand_type), intent(in) :: rhs                !< Right hand side.
-            real(RP), allocatable :: operator_result(:) !< Operator result.
+            real(RK), allocatable :: operator_result(:) !< Operator result.
         end function real_scalar_op_integrand
 
         pure function symmetric_operator(lhs, rhs) result(operator_result)
             !< Symmetric type operator integrand.op.integrand.
-            import :: integrand_type, RP
+            import :: integrand_type, RK
             class(integrand_type), intent(in) :: lhs                !< Left hand side.
             class(integrand_type), intent(in) :: rhs                !< Right hand side.
-            real(RP), allocatable :: operator_result(:) !< Operator result.
+            real(RK), allocatable :: operator_result(:) !< Operator result.
         end function symmetric_operator
 
-        pure subroutine assignment_integrand(lhs, rhs)
+        pure subroutine symmetric_assignment(lhs, rhs)
             !< Symmetric assignment integrand = integrand.
             import :: integrand_type
             class(integrand_type), intent(inout) :: lhs !< Left hand side.
             class(integrand_type), intent(in) :: rhs !< Right hand side.
-        end subroutine assignment_integrand
+        end subroutine symmetric_assignment
 
-        pure subroutine assignment_real(lhs, rhs)
-            !< Symmetric assignment integrand = integrand.
-            import :: integrand_type, RP
+        pure subroutine assignment_from_real(lhs, rhs)
+            !< Asymmetric assignment integrand = real.
+            import :: integrand_type, RK
             class(integrand_type), intent(inout) :: lhs     !< Left hand side.
-            real(RP), intent(in) :: rhs(1:) !< Right hand side.
-        end subroutine assignment_real
+            real(RK), intent(in) :: rhs(1:) !< Right hand side.
+        end subroutine assignment_from_real
+
+        pure subroutine assignment_to_real(lhs, rhs)
+            !< Asymmetric assignment real = integrand.
+            import :: integrand_type, RK
+            real(RK), intent(inout) :: lhs(1:) !< Left hand side.
+            class(integrand_type), intent(in) :: rhs !< Right hand side.
+        end subroutine assignment_to_real
     end interface
 
 end module integrand

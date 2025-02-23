@@ -2,18 +2,14 @@ program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     !!
 
-    use chemistry, only: compute_chemistry
-    use pprk4, only: initialize_pprk4, pprk4_integrate, finalize_pprk4
-    use pprk4, only: initialize_pprk4, pprk4_integrate, finalize_pprk4
+    use chemistry, only: carbonate_chem_type
+    use rkc_integrator, only: rkc_type
 
     implicit none ! ------------------------------------------------------------
 
     character(len=*), parameter :: input_file = "user_inputs.nml"
-
-    character(len=20) :: model, integrator
-        !! configuration choices
     character(len=128) :: save_name
-        !! output filenames
+        !! output filename
     real :: dt_save = 1e99
         !! data output intervals, [s]
     real :: start_time = 0.0, end_time = 1e-5, time = 0.0
@@ -22,20 +18,23 @@ program chem_ode_miniapp
         !! temperature [deg C], and salinity [units]
     integer :: nx(3)
         !! 3D size of domain
-    integer :: nscl, nargs
+    integer :: nflat, npts
+
     integer :: nt, save_unit, nml_unit
     integer :: ix, jy, kz
 
-    real, allocatable :: tracers(:, :, :, :), y_0(:)
+    type(carbonate_chem_type) :: chem
+    type(rkc_type) :: solver
+
+    real, allocatable :: y_3d(:, :, :, :), y_0(:)
         !! 3D reacting scalars state vector and 0D initial condition
-    real, allocatable :: args(:, :, :, :), p_0(:)
+    real, allocatable :: p_3d(:, :, :, :), p_0(:)
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
         !! and it's 0D initial condition
+    real, pointer, contiguous :: y_1d(:, :), p_1d(:, :)
 
-    namelist /params/ integrator, start_time, end_time, save_name, dt_save, &
-        nx, model, temperature, salinity
-    namelist /carbonate_ic/ y_0
-    namelist /npzd_ic/ y_0
+    namelist /params/ start_time, end_time, save_name, dt_save, nx, nflat
+    namelist /carbonate_ic/ temperature, salinity, y_0
 
     ! Configuration and Setup --------------------------------------------------
     ! Read namelists from input file
@@ -43,80 +42,97 @@ program chem_ode_miniapp
     read (nml_unit, nml=params)
     rewind (nml_unit)
 
-    ! Initialize chemistry, which associates the `compute_chemistry` pointer
-    print *, 'chem model = ', model
-    call initialize_chemistry(trim(model), nscl, nargs)
+    allocate (y_3d(nx(1), nx(2), nx(3), chem%nscl), y_0(chem%nscl))
+    allocate (p_3d(nx(1), nx(2), nx(3), chem%nargs), p_0(chem%nargs))
 
-    ! NOTE: allocation of nscl/nargs as intermediate dimension before
-    ! z-direction is how NCAR-LES does it currently. This is sure
-    ! to be inefficient and should be changed as part of testing.
-    ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
-    allocate (tracers(nx(1), nx(2), nx(3), nscl), y_0(nscl))
-    allocate (args(nx(1), nx(2), nx(3), nargs), p_0(nargs))
+    read (nml_unit, nml=carbonate_ic)
+    close (nml_unit)
+    p_0(1) = temperature
+    p_0(2) = salinity
 
-    ! Read in the chemical initial condition from the input file
-    if (model == 'carbonate') then
-        read (nml_unit, nml=carbonate_ic)
-        p_0(1) = temperature
-        p_0(2) = salinity
-    else if (model == 'npzd') then
-        read (nml_unit, nml=npzd_ic)
-        p_0(1) = temperature
-    end if
+    print *, 'Initializing carbonate chemistry object'
+    select case(nflat)
+    case(1)
+        npts = nx(1)
+        y_1d(1:npts, 1:chem%nscl) => y_3d(:, 1, 1, :)
+        p_1d(1:npts, 1:chem%nargs) => p_3d(:, 1, 1, :)
+        call chem%initialize(npts, y_1d, p_1d)
+    case(2)
+        npts = nx(1) * nx(2)
+        y_1d(1:npts, 1:chem%nscl) => y_3d(:, :, 1, :)
+        p_1d(1:npts, 1:chem%nargs) => p_3d(:, :, 1, :)
+        call chem%initialize(npts, y_1d, p_1d)
+    case(3)
+        npts = product(nx)
+        y_1d(1:npts, 1:chem%nscl) => y_3d
+        p_1d(1:npts, 1:chem%nargs) => p_3d
+        call chem%initialize(npts, y_1d, p_1d)
+    end select
 
+    print *, 'Initializing RKC integrator'
+    call solver%initialize(chem)
+
+    print *, 'Filling 3D initial conditions'
     !TODO: Add perturbations to the ICs, like sinusoids or random noise, so that
     !      each spatial point solves a slightly different trajectory in state space
     do kz = 1, nx(3)
         do jy = 1, nx(2)
             do ix = 1, nx(1)
-                tracers(ix, jy, kz, :) = y_0
-                args(ix, jy, kz, :) = p_0
+                y_3d(ix, jy, kz, :) = y_0
+                p_3d(ix, jy, kz, :) = p_0
             end do
         end do
     end do
-
-    close (nml_unit)
-
-    ! Initialize the ODE solver, which associates the `solve_interval` pointer
-    ! print *, 'integrator = ', integrator
-    call initialize_pprk4(tracers, rhs_wrapped, init_dt=1e-8)
 
     ! Open file for saving tracer history
     open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
 
     ! Save initial conditions
-    print *, 'saving initial condition'
+    print *, 'Saving output 0'
     call save_tracers(time_in_days=.true.)
 
     ! Time integration loop ----------------------------------------------------
     nt = 1
     do while (time < end_time)
 
-        call pprk4_integrate(time, time + dt_save, tracers, args)
+        select case(nflat)
+        case(1)
+            do kz = 1, nx(3)
+                do jy = 1, nx(2)
+                    ! solve 3d field one x-vector at a time
+                    y_1d(1:npts, 1:chem%nscl) => y_3d(:, jy, kz, :)
+                    p_1d(1:npts, 1:chem%narg) => p_3d(:, jy, kz, :)
+                    call solver%integrate(time, time + dt_save)
+                end do
+            end do
+        case(2)
+            do kz = 1, nx(3)
+                ! solve 3d field one xy-plane at a time
+                y_1d(1:npts, 1:chem%nscl) => y_3d(:, :, kz, :)
+                p_1d(1:npts, 1:chem%narg) => p_3d(:, :, kz, :)
+                call solver%integrate(time, time + dt_save)
+            end do
+        case(3)
+            ! directly solve whole 3d field
+            call solver%integrate(time, time + dt_save)
+        end select
 
         time = time + dt_save
 
-        print *, 'saving output', nt
+        print *, 'Saving output', nt
         call save_tracers(time_in_days=.true.)
         nt = nt + 1
 
     end do
 
     ! Finalization -------------------------------------------------------------
+    print *, 'Finalizing the program.'
     close (save_unit)
-    call finalize_pprk4()
-    deallocate (tracers, args, y_0, p_0)
+    call solver%destroy()
+    call chem%destroy()
+    deallocate (y_3d, p_3d, y_0, p_0)
 
 contains ! ---------------------------------------------------------------------
-
-    subroutine rhs_wrapped(t, y, ydot, p)
-        real, intent(in) :: t
-        real, allocatable, intent(in) :: y(:, :, :, :)
-        real, allocatable, intent(inout) :: ydot(:, :, :, :)
-        real, allocatable, intent(in), optional :: p(:, :, :, :)
-        associate (t => t); end associate ! suppress unused dummy argument warning
-        call compute_chemistry(y, ydot, p)
-    end subroutine rhs_wrapped
 
     subroutine save_tracers(time_in_days)
         !! DOCSTRING
