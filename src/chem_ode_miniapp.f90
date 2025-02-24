@@ -1,6 +1,5 @@
 program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
-    !!
     use mpi
     use chemistry, only: initialize_chemistry, compute_chemistry
     use integrators, only: initialize_integrator, finalize_integrator, &
@@ -26,8 +25,9 @@ program chem_ode_miniapp
     integer :: nt, save_unit, nml_unit
     integer :: ix, jy, kz, ip
        !! MPI variables
-    integer:: rank, nprocs, ierr, px, py !, px_rank, py_rank, comm2d
-    
+    integer:: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d
+    integer:: dims(2), coords(2)
+    logical:: periods(2)
 
     real, allocatable :: tracers(:, :, :, :), tracers_loc(:, :, :, :), y_0(:), y(:)
         !! 3D reacting scalars state vector and 0D initial condition
@@ -45,10 +45,19 @@ program chem_ode_miniapp
     call MPI_COMM_SIZE(MPI_COMM_WORLD, nprocs, ierr)
 
     print *, 'Hello World from process: ', rank, 'of ', nprocs
-
-    ! breaking down the matrices 
-    px = int(sqrt(real(nprocs)))
-    py = nprocs / px
+    
+    dims = [0, 0]
+    periods = [.true., .true.]
+    
+    call MPI_Dims_create(nprocs, 2, dims, ierr)
+    call MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, .true., comm2d, ierr)
+    call MPI_Cart_coords(comm2d, rank, 2, coords, ierr)
+    
+    print *, "Rank ", rank, " has coordinates (", coords(1), ",", coords(2), ")"
+    px = dims(1)
+    py = dims(2)
+    px_rank = coords(1)
+    py_rank = coords(2)
 
     nx_loc(1) = nx(1) / px
     nx_loc(2) = nx(2) / py
@@ -106,10 +115,17 @@ program chem_ode_miniapp
                             ip * nx_loc(2) + 1:(ip+1) * nx_loc(2), :, 1:nx_loc(3)), &
                             nx_loc(1) * nx_loc(1) * nscl * nx_loc(3), MPI_REAL, ip, &
                             0, MPI_COMM_WORLD, ierr)
+        
+            call MPI_Send(args(ip * nx_loc(1) + 1:(ip+1) * nx_loc(1), &
+                            ip * nx_loc(2) + 1:(ip+1) * nx_loc(2), :, 1:nx_loc(3)), &
+                            nx_loc(1) * nx_loc(1) * nargs * nx_loc(3), MPI_REAL, ip, &
+                            0, MPI_COMM_WORLD, ierr)
         end do
+        args_loc = args(1:nx_loc(1), 1:nx_loc(2), :, 1:nx_loc(3))  ! Root keeps first chunk
         tracers_loc = tracers(1:nx_loc(1), 1:nx_loc(2), :, 1:nx_loc(3))  ! Root keeps first chunk
     else
         call MPI_Recv(tracers_loc, nx_loc(1) * nx_loc(1) * nscl * nx_loc(3), MPI_REAL, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+        call MPI_Recv(args_loc, nx_loc(1) * nx_loc(1) * nargs * nx_loc(3), MPI_REAL, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
     end if
     ! Initialize the ODE solver, which associates the `solve_interval` pointer
     !print *, 'integrator = ', integrator
@@ -138,7 +154,7 @@ program chem_ode_miniapp
         end do
 
         call MPI_Gather(tracers_loc, nx_loc(1)*nx_loc(2)*nx_loc(3)*nscl, MPI_REAL, tracers, nx_loc(1)*nx_loc(2)*nx_loc(3)*nscl, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
-
+        call MPI_Gather(args_loc, nx_loc(1)*nx_loc(2)*nx_loc(3)*nargs, MPI_REAL, args, nx_loc(1)*nx_loc(2)*nx_loc(3)*nargs, MPI_REAL, 0, MPI_COMM_WORLD, ierr)
         if (rank == 0) then
             print *, 'saving output', nt
             call save_tracers(time_in_days=.true.)
@@ -199,4 +215,3 @@ contains ! ---------------------------------------------------------------------
     end subroutine save_tracers
 
 end program chem_ode_miniapp
-
