@@ -6,18 +6,18 @@ module chemistry
 
     type, extends(integrand_type) :: carbonate_chem_type
         private
-        integer(IK), parameter, public :: nscl = 6, narg = 2
+        integer(IK), public :: nscl = 6, narg = 2
         integer(IK), public :: npts
-        real(RK), pointer, contiguous, public :: species(:, :)
-            !! objects may or may not "own" this data, symmetric assignment associates pointers
-        real(RK), pointer, contiguous, public :: args(:, :)
-            !! objects may or may not "own" this data, symmetric assignment associates pointers
+        real(RK), contiguous, pointer, public :: species(:, :) => null()
+            !! objects may or may not "own" this data, but symmetric assignment forces a data copy
+        real(RK), contiguous, pointer, public :: args(:, :) => null()
+            !! objects may or may not "own" this data, and symmetric assignment associates pointers
 
     contains
         procedure, pass(self), public :: initialize
         procedure, pass(self), public :: destroy
-        procedure, pass(self), public :: state
         procedure, pass(self), public :: size
+        procedure, pass(self), public :: state
         procedure, pass(self), public :: d_dt => compute_chemistry !< Time derivative
         ! procedure, pass(lhs) :: local_error
         ! +
@@ -37,7 +37,6 @@ module chemistry
         ! =
         procedure, pass(lhs) :: integrand_eq_integrand !< `=` operator.
         procedure, pass(lhs) :: integrand_eq_real      !< `= real` operator.
-        procedure, pass(lhs) :: real_eq_integrand      !< `real =` operator.
     end type carbonate_chem_type
 
 contains
@@ -46,8 +45,8 @@ contains
         !< Initialize integrand.
         class(carbonate_chem_type), intent(inout) :: self
         integer(IK), intent(in) :: npts
-        real(RK), pointer, contiguous, intent(in), optional :: species(:, :)
-        real(RK), pointer, contiguous, intent(in), optional :: args(:, :)
+        real(RK), contiguous, target, intent(in), optional :: species(:, :)
+        real(RK), contiguous, target, intent(in), optional :: args(:, :)
 
         call self%destroy()
         self%npts = npts
@@ -56,25 +55,20 @@ contains
         if (present(species)) self%species => species
         if (present(args)) self%args => args
 
-        ! then, regardless, check if the pointer is allocated
-        if (.not. allocated(self%species)) allocate(self%species(npts, self%nscl))
-        if (.not. allocated(self%args)) allocate(self%args(npts, self%nargs))
+        ! then, if not associated, allocate memory for the pointers
+        if (.not. associated(self%species)) allocate(self%species(npts, self%nscl))
+        if (.not. associated(self%args)) allocate(self%args(npts, self%narg))
     end subroutine initialize
 
     subroutine destroy(self)
-        !< Destroy integrand. Apparently this works via lhs reallocation. Who knew?
+        !< Destroy integrand.
+        !< WARNING: DOUBLE CHECK THIS FOR MEMORY LEAKING, CONFUSED ABOUT STANDARD!
         class(carbonate_chem_type), intent(inout) :: self
-        type(carbonate_chem_type) :: fresh
 
-        self = fresh
+        self%npts = -1
+        if (associated(self%species)) nullify(self%species)
+        if (associated(self%args)) nullify(self%args)
     end subroutine destroy
-
-    pure function state(self)
-        !! Reference a 1D pointer to the 2D species array
-        class(carbonate_chem_type), intent(in) :: self
-        real(RK), contiguous, pointer :: state(:)
-        state(1:self%size()) = self%species
-    end function
 
     pure function size(self)
         class(carbonate_chem_type), intent(in) :: self
@@ -82,73 +76,80 @@ contains
         size = self%npts * self%nscl
     end function
 
-    pure function compute_chemistry(self, time) result(out)
-        class(integrand_type), intent(in) :: self !< Integrand object.
-        real(RK), intent(in), optional :: time    !< time of integration (unused)
-        real(RK), allocatable, target :: out(:)   !< Result as 1D array
+    function state(self)
+        !! Reference a 1D pointer to the 2D species array
+        class(carbonate_chem_type), intent(in) :: self
+        real(RK), contiguous, pointer :: state(:)
+        state(1:self%size()) => self%species
+    end function
+
+    pure function compute_chemistry(self, t) result(dState_dt)
+        class(carbonate_chem_type), intent(in) :: self !< Integrand object.
+        real(RK), intent(in), optional :: t    !< time of integration (unused)
+        real(RK), allocatable, target :: dState_dt(:)   !< Result as 1D array
 
         real(RK), contiguous, pointer :: dSpecies_dt(:, :) !< Result reshaped as 2D array
-        real :: K1s, K2s, Kw, Kb, Rgas, S, T, H_qss
+        real :: K1s, K2s, Kw, Kb, Rgas, Salinity, Temperature, H_qss
         real :: a1, a2, a3, a4, a5, a6, a7
         real :: b1, b2, b3, b4, b5, b6, b7
         integer :: ipt
         logical :: time_check
 
-        time_check = present(time) ! suppresses unused argument warning
-        allocate(out(self%size()))
-        dSpecies_dt(1:self%npts, 1:self%nscl) => out ! reshape opr via pointer reference
+        time_check = present(t) ! suppresses unused argument warning
+        allocate(dState_dt(self%size()))
+        dSpecies_dt(1:self%npts, 1:self%nscl) => dState_dt ! reshape dState_dt via pointer reference
 
-        do jp = 1, self%npts
-            associate(c => self%species(jp, :), &
-                      args => self%args(jp, :), &
-                      dcdt => dSpecies_dt(jp, :) & ! does the correct indexing into opr for us
+        do ipt = 1, self%npts
+            associate(c => self%species(ipt, :), &
+                      args => self%args(ipt, :), &
+                      dcdt => dSpecies_dt(ipt, :) & ! does the correct indexing into opr for us
                     )
 
-                T = args(1) + 273.15
-                S = args(2)
+                Temperature = args(1) + 273.15
+                Salinity = args(2)
 
                 K1s = exp( &
-                        (-2307.1266 / T + 2.83655) &
-                        - 1.5529413 * log(T) &
-                        + (-4.0484 / T - 0.20760841) * (S**0.5) &
-                        + 0.08468345 * S &
-                        - 0.00654208 * (S**1.5) &
-                        + log(1.0 - 0.001005 * S) &
+                        (-2307.1266 / Temperature + 2.83655) &
+                        - 1.5529413 * log(Temperature) &
+                        + (-4.0484 / Temperature - 0.20760841) * (Salinity**0.5) &
+                        + 0.08468345 * Salinity &
+                        - 0.00654208 * (Salinity**1.5) &
+                        + log(1.0 - 0.001005 * Salinity) &
                         ) * (1.0e6)
                 K2s = exp( &
-                        (-3351.6106 / T - 9.226508) &
-                        - 0.2005743 * log(T) &
-                        + (-23.9722 / T - 0.106901773) * (S**0.5) &
-                        + 0.1130822 * S &
-                        - 0.00846934 * (S**1.5) &
-                        + log(1.0 - 0.001005 * S) &
+                        (-3351.6106 / Temperature - 9.226508) &
+                        - 0.2005743 * log(Temperature) &
+                        + (-23.9722 / Temperature - 0.106901773) * (Salinity**0.5) &
+                        + 0.1130822 * Salinity &
+                        - 0.00846934 * (Salinity**1.5) &
+                        + log(1.0 - 0.001005 * Salinity) &
                         ) * (1.0e6)
                 Kw = exp( &
-                        (-13847.26 / T + 148.96502) &
-                        - 23.65218 * log(T) &
-                        + (118.67 / T - 5.977 + 1.0495 * log(T)) * (S**0.5) &
-                        - 0.01615 * S &
+                        (-13847.26 / Temperature + 148.96502) &
+                        - 23.65218 * log(Temperature) &
+                        + (118.67 / Temperature - 5.977 + 1.0495 * log(Temperature)) * (Salinity**0.5) &
+                        - 0.01615 * Salinity &
                         ) * (1.0e6) !(DoE, 1994)
                 Kb = exp( &
-                        (-8966.9 - 2890.53 * (S**0.5) &
-                        - 77.942 * S &
-                        + 1.728 * (S**1.5) &
-                        - 0.0996 * (S**2) &
-                        ) / T &
-                        + (148.0248 + 137.1942 * (S**0.5)) &
-                        + 1.62142 * S &
-                        - (24.4344 + 25.085 * (S**0.5) + 0.2474 * S) * log(T) &
-                        + (0.053105 * (S**0.5) * T) &
+                        (-8966.9 - 2890.53 * (Salinity**0.5) &
+                        - 77.942 * Salinity &
+                        + 1.728 * (Salinity**1.5) &
+                        - 0.0996 * (Salinity**2) &
+                        ) / Temperature &
+                        + (148.0248 + 137.1942 * (Salinity**0.5)) &
+                        + 1.62142 * Salinity &
+                        - (24.4344 + 25.085 * (Salinity**0.5) + 0.2474 * Salinity) * log(Temperature) &
+                        + (0.053105 * (Salinity**0.5) * Temperature) &
                         ) * (1.0e6) !(Dickson, 1990)
                 Rgas = 0.0083143
 
-                a1 = exp(1246.98 - 6.19 * (10.0**4) / T - 183.0 * log(T))
-                a2 = (4.7e7) * exp(-23.3 / (Rgas * T)) / (1.0e6)
+                a1 = exp(1246.98 - 6.19 * (10.0**4) / Temperature - 183.0 * log(Temperature))
+                a2 = (4.7e7) * exp(-23.3 / (Rgas * Temperature)) / (1.0e6)
                 a3 = (5.0e10) / (1.0e6)
                 a4 = (6.0e9) / (1.0e6)
                 a5 = (1.4e-3) * (1.0e6)
-                a6 = (4.58e10) * exp(-(20.8 / (Rgas * T))) / (1.0e6)
-                a7 = (3.05e10) * exp(-(20.8 / (Rgas * T))) / (1.0e6)
+                a6 = (4.58e10) * exp(-(20.8 / (Rgas * Temperature))) / (1.0e6)
+                a7 = (3.05e10) * exp(-(20.8 / (Rgas * Temperature))) / (1.0e6)
                 b1 = a1 / K1s
                 b2 = (Kw * a2 / K1s) * (1.0e6)
                 b3 = a3 * K2s
@@ -204,7 +205,7 @@ contains
     pure function integrand_add_real(lhs, rhs) result(opr)
         !! `+ real_array` operator.
         class(carbonate_chem_type), intent(in) :: lhs !< Left hand side.
-        real(RK), intent(in) :: rhs(:) !< Right hand side.
+        real(RK), intent(in) :: rhs(1:) !< Right hand side.
         real(RK), allocatable :: opr(:) !< Operator result.
         integer :: iv, jp, ks ! indices into vector, points, species
         allocate(opr(lhs%size()))
@@ -220,7 +221,7 @@ contains
 
     pure function real_add_integrand(lhs, rhs) result(opr)
         !! `real_array +` operator.
-        real(RK), intent(in) :: lhs(:) !< Left hand side.
+        real(RK), intent(in) :: lhs(1:) !< Left hand side.
         class(carbonate_chem_type), intent(in) :: rhs     !< Left hand side.
         real(RK), allocatable :: opr(:) !< Operator result.
         integer :: iv, jp, ks ! indices into vector, points, species
@@ -259,7 +260,7 @@ contains
     pure function integrand_multiply_real(lhs, rhs) result(opr)
         !! `* real_array` operator.
         class(carbonate_chem_type), intent(in) :: lhs !< Left hand side.
-        real(RK), intent(in) :: rhs(:) !< Right hand side.
+        real(RK), intent(in) :: rhs(1:) !< Right hand side.
         real(RK), allocatable :: opr(:) !< Operator result.
         integer :: iv, jp, ks ! indices into vector, points, species
         allocate(opr(lhs%size()))
@@ -275,7 +276,7 @@ contains
 
     pure function real_multiply_integrand(lhs, rhs) result(opr)
         !! `real_array *` operator.
-        real(RK), intent(in) :: lhs(:) !< Left hand side.
+        real(RK), intent(in) :: lhs(1:) !< Left hand side.
         class(carbonate_chem_type), intent(in) :: rhs     !< Left hand side.
         real(RK), allocatable :: opr(:) !< Operator result.
         integer :: iv, jp, ks ! indices into vector, points, species
@@ -285,7 +286,7 @@ contains
         do ks = 1, rhs%nscl
             do jp = 1, rhs%npts
                 iv = iv + 1
-                opr(iv) = lhs%species(iv) * rhs%species(jp, ks)
+                opr(iv) = lhs(iv) * rhs%species(jp, ks)
             end do
         end do
     end function real_multiply_integrand
@@ -302,7 +303,7 @@ contains
         do ks = 1, lhs%nscl
             do jp = 1, lhs%npts
                 iv = iv + 1
-                opr(iv) = lhs%species(jp, ks) * rhs(iv)
+                opr(iv) = lhs%species(jp, ks) * rhs
             end do
         end do
     end function integrand_multiply_real_scalar
@@ -319,7 +320,7 @@ contains
         do ks = 1, rhs%nscl
             do jp = 1, rhs%npts
                 iv = iv + 1
-                opr(iv) = lhs(iv) * rhs%species(jp, ks)
+                opr(iv) = lhs * rhs%species(jp, ks)
             end do
         end do
     end function real_scalar_multiply_integrand
@@ -348,7 +349,7 @@ contains
     pure function integrand_sub_real(lhs, rhs) result(opr)
         !! `- real_array` operator.
         class(carbonate_chem_type), intent(in) :: lhs !< Left hand side.
-        real(RK), intent(in) :: rhs(:) !< Right hand side.
+        real(RK), intent(in) :: rhs(1:) !< Right hand side.
         real(RK), allocatable :: opr(:) !< Operator result.
         integer :: iv, jp, ks ! indices into vector, points, species
         allocate(opr(lhs%size()))
@@ -364,7 +365,7 @@ contains
 
     pure function real_sub_integrand(lhs, rhs) result(opr)
         !! `real_array -` operator.
-        real(RK), intent(in) :: lhs(:) !< Left hand side.
+        real(RK), intent(in) :: lhs(1:) !< Left hand side.
         class(carbonate_chem_type), intent(in) :: rhs !< Left hand side.
         real(RK), allocatable :: opr(:)  !< Operator result.
         integer :: iv, jp, ks ! indices into vector, points, species
@@ -382,48 +383,40 @@ contains
     ! =
     subroutine integrand_eq_integrand(lhs, rhs)
         !< `=` operator.
-        ! This is the exact same behavior as derived-type
-        ! intrinsic assignment, but the abstract class `integrand_type` expects
-        ! this deferred procedure to be provided for defined assignment
+        ! Intrinsic assignment would associate the species pointers, not the
+        ! underlying data, but to use two objects inside an integrator with an
+        ! update line like `y = y_new`, then we must force a copy of the species
+        ! data from the RHS to the LHS of the assignment operator.
         class(carbonate_chem_type), intent(inout) :: lhs !< Left hand side.
         class(integrand_type), intent(in) :: rhs !< Right hand side.
 
         select type (rhs)
         class is (carbonate_chem_type)
             lhs%npts = rhs%npts
-            lhs%species => rhs%species
             lhs%args => rhs%args
+            ! force the copy of species data, or nullify
+            if (associated(rhs%species)) then
+                if (.not. associated(lhs%species)) allocate(lhs%species(lhs%npts, lhs%nscl))
+                lhs%species(:, :) = rhs%species
+            else
+                nullify (lhs%species)
+            end if
         end select
     end subroutine integrand_eq_integrand
 
     pure subroutine integrand_eq_real(lhs, rhs)
         !< Assign a real to an integrand field.
         class(carbonate_chem_type), intent(inout) :: lhs !< Left hand side.
-        real(RK), intent(in) :: rhs(:) !< Right hand side.
+        real(RK), intent(in) :: rhs(1:) !< Right hand side.
         integer :: iv, jp, ks ! indices into vector, points, species
 
         iv = 0
-        do ks = 1, rhs%nscl
-            do jp = 1, rhs%npts
+        do ks = 1, lhs%nscl
+            do jp = 1, lhs%npts
                 iv = iv + 1
                 lhs%species(jp, ks) = rhs(iv)
             end do
         end do
     end subroutine integrand_eq_real
-
-    pure subroutine real_eq_integrand(lhs, rhs)
-        !< Assign an integrand field to a real.
-        real(RK), intent(inout) :: lhs(:) !< Left hand side.
-        class(carbonate_chem_type), intent(in) :: rhs !< Right hand side.
-        integer :: iv, jp, ks ! indices into vector, points, species
-
-        iv = 0
-        do ks = 1, rhs%nscl
-            do jp = 1, rhs%npts
-                iv = iv + 1
-                rhs(iv) = lhs%species(jp, ks)
-            end do
-        end do
-    end subroutine real_eq_integrand
 
 end module chemistry
