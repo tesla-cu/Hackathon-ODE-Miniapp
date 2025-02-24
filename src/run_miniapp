@@ -1,0 +1,52 @@
+#!/bin/sh
+
+# Define folder name
+folder=case
+
+rm -rf $folder
+
+# Making output folder
+mkdir $folder
+mkdir $folder/code
+
+# Moving files
+cp test/user_inputs.nml $folder/code/user_inputs.nml
+cp -a src/. $folder/code/
+
+cd $folder/code/
+
+# Load in modules
+module --force purge
+module load ncarenv/23.06
+module load intel/2023.0.0
+module load openmpi/main
+
+# Compile
+mpif90 -r8 -132 -O2 -o miniapp pprk4.f90 ncarles_rkc.f90 miniapp_rkc.f90 integrators.f90 chemistry.f90 chem_ode_miniapp.f90 -limf
+
+# Creating executable
+cd ../
+cp code/miniapp .
+cp code/user_inputs.nml .
+cat > EXEC_STEP << EXEC
+#!/bin/bash
+#PBS -A UCSG0002
+#PBS -N hybrid_job
+#PBS -q main
+#PBS -l walltime=00:10:00
+#PBS -l select=1:ncpus=32:mpiprocs=32
+#PBS -o exec.out
+#PBS -e exec.err
+
+module --force purge
+module load ncarenv/23.06
+module load intel/2023.0.0
+module load openmpi/main
+
+mpiexec ./miniapp > output.out
+EXEC
+
+chmod +x miniapp
+# Run application
+qsub < EXEC_STEP
+
