@@ -3,8 +3,7 @@ FC := ifort # OR mpif90, etc.
 SRCDIR := src
 BUILDDIR := build
 
-SOURCES := src/pprk4.f90 src/chemistry.f90 src/chem_ode_miniapp.f90
-# src/ncarles_rkc.f90 src/miniapp_rkc.f90 src/integrators.f90
+SOURCES := src/integrand.f90 src/rkc_integrator.f90 src/chemistry.f90 src/chem_ode_miniapp.f90
 
 # Generate corresponding object file paths in the build directory
 OBJECTS := $(patsubst $(SRCDIR)/%.f90, $(BUILDDIR)/%.o, $(SOURCES))
@@ -119,7 +118,7 @@ $(EXECUTABLE): $(OBJECTS)
 # Rule to compile source files into object files
 $(BUILDDIR)/%.o: $(SRCDIR)/%.f90
 	@mkdir -p $(BUILDDIR)
-	$(FC) $(FFLAGS) $(OPTIONS) -c $< -o $@ 
+	$(FC) $(FFLAGS) $(OPTIONS) -c $< -o $@
 
 .PHONY: format
 format:

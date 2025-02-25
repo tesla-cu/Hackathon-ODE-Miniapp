@@ -62,9 +62,8 @@ module integrand
         ! =
         procedure(symmetric_assignment), pass(lhs), deferred :: integrand_eq_integrand !< `=` operator.
         procedure(assignment_from_real), pass(lhs), deferred :: integrand_eq_real      !< `= real` operator.
-        procedure(assignment_to_real), pass(lhs), deferred :: real_eq_integrand      !< `real =` operator.
         generic, public :: assignment(=) => &
-            integrand_eq_integrand, integrand_eq_real, real_eq_integrand !< Overloading `=` assignament.
+            integrand_eq_integrand, integrand_eq_real !< Overloading `=` assignament.
     end type integrand_type
 
     abstract interface
@@ -77,7 +76,7 @@ module integrand
             integer(IK) :: integrand_dimension !< Integrand dimension.
         end function integrand_dimension
 
-        pure function integrand_state(self)
+        function integrand_state(self)
             !< Return integrand dimension.
             import :: integrand_type, RK
             class(integrand_type), intent(in) :: self !< Integrand.
@@ -141,7 +140,7 @@ module integrand
             real(RK), allocatable :: operator_result(:) !< Operator result.
         end function symmetric_operator
 
-        pure subroutine symmetric_assignment(lhs, rhs)
+        subroutine symmetric_assignment(lhs, rhs)
             !< Symmetric assignment integrand = integrand.
             import :: integrand_type
             class(integrand_type), intent(inout) :: lhs !< Left hand side.
@@ -154,13 +153,6 @@ module integrand
             class(integrand_type), intent(inout) :: lhs     !< Left hand side.
             real(RK), intent(in) :: rhs(1:) !< Right hand side.
         end subroutine assignment_from_real
-
-        pure subroutine assignment_to_real(lhs, rhs)
-            !< Asymmetric assignment real = integrand.
-            import :: integrand_type, RK
-            real(RK), intent(inout) :: lhs(1:) !< Left hand side.
-            class(integrand_type), intent(in) :: rhs !< Right hand side.
-        end subroutine assignment_to_real
     end interface
 
 end module integrand
