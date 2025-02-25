@@ -10,7 +10,7 @@
         !! solution save rate [s]
     nx = 16, 16, 16
         !! 3D domain size
-    nflat = 1
+    nflat = 2
         !! number of dimensions to flatten into chem ode, choice: {1, 2, 3}
 /
 
