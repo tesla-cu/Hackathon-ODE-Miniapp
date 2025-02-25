@@ -1,5 +1,5 @@
 COMPILER := intel
-FC := ifort # OR mpif90, etc.
+FC := ifx # OR mpif90, etc.
 SRCDIR := src
 BUILDDIR := build
 
@@ -57,7 +57,7 @@ OPT1 := -g -O2 -fp-model=strict,source -fprotect-parens -prec-div
 # -- "Normal" floating-point operations
 OPT2 := -g -O2
 # -- Very optimized FLOPs, any way in which you can trade accuracy for speed is turned on.
-OPT3 := -g -O2 -fp-model=fast=1 -fast-transcendentals -fma -no-prec-div -nostandard-realloc-lhs
+OPT3 := -g -O2 -fp-model=fast -fast-transcendentals -fma -no-prec-div -nostandard-realloc-lhs
 
 # USE THESE FOR MAXIMUM COMPILER OPTIMIZATION
 # -- Once O3 and ipo are turned on, I don't think you can use -g anymore.
