@@ -1,6 +1,7 @@
 .build/
-build/
 .test/
+test/*
+build
 **/.DS_Store
 **/*.mod
 **/*.o
@@ -9,3 +10,7 @@ build/
 **/*.dat
 **/*.exe
 **/*.dSYM
+# whitelist any .nml, .sh, or .py files in test/
+!test/*.nml
+!test/*.sh
+!test/*.py

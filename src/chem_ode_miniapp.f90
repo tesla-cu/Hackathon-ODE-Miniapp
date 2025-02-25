@@ -31,12 +31,12 @@ program chem_ode_miniapp
     real :: linear_ramp
     real, allocatable :: tracers(:, :, :, :), y_0(:), y(:)
         !! 3D reacting scalars state vector and 0D initial condition
-    real, allocatable:: args(:, :, :, :), p_0(:), p(:)
+    real, allocatable :: args(:, :, :, :), p_0(:), p(:)
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
         !! and it's 0D initial condition
 
     namelist /params/ integrator, start_time, end_time, save_name, dt_save, &
-                      nx, model, temperature, salinity
+        nx, model, temperature, salinity
     namelist /carbonate_ic/ y_0
     namelist /npzd_ic/ y_0
 
@@ -60,7 +60,7 @@ program chem_ode_miniapp
     ! Read namelists from input file
     open (newunit=nml_unit, file=input_file, status="old")
     read (nml_unit, nml=params)
-    rewind(nml_unit)
+    rewind (nml_unit)
 
     ! Initialize chemistry, which associates the `compute_chemistry` pointer
     !print *, 'chem model = ', model
@@ -144,7 +144,7 @@ contains ! ---------------------------------------------------------------------
         real, intent(in) :: t, y(:)
         real, intent(inout) :: ydot(:)
         real, intent(in), optional :: p(:)
-        associate( t => t ); end associate ! suppress unused dummy argument warning
+        associate (t => t); end associate ! suppress unused dummy argument warning
         call compute_chemistry(y, ydot, p)
     end subroutine rhs_wrapped
 

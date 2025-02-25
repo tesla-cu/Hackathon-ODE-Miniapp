@@ -67,16 +67,16 @@ contains
 
         ! work arrays
         real, dimension(:), allocatable :: y_end, ydot, vtemp1, vtemp2, eigenv
-            ! internal work arrays: not all may be necessary, haven't figured out minimum
-            ! needed working memory. `eigenv` used to be stored in work(4:)
+        ! internal work arrays: not all may be necessary, haven't figured out minimum
+        ! needed working memory. `eigenv` used to be stored in work(4:)
 
         real :: err_old, h_old, h_n, rho
-            ! these variables used to be stored in work(0:3)
+        ! these variables used to be stored in work(0:3)
         integer :: ny, nstep, s, i
         real :: t_rkc, hmax, hmin, err, est, adapt, temp1, temp2
 
         ! Initialize progress variables
-        allocate(y_end, ydot, vtemp1, vtemp2, eigenv, mold=y)
+        allocate (y_end, ydot, vtemp1, vtemp2, eigenv, mold=y)
         ny = size(y)
 
         t_rkc = t_i
@@ -112,6 +112,7 @@ contains
         end if
 
         ! INTEGRATE TO END TIME
+        print *, 'RKC initial dt = ', h_n
         do
             ! perform tentative time step
             y_end = rkc_step(t_rkc, h_n, s, y, ydot, p)
@@ -179,6 +180,7 @@ contains
             end if
 
         end do ! while loop
+        print *, 'RKC final dt, steps = ', h_n, nstep
 
     end subroutine rkc_integrate
 
@@ -283,6 +285,8 @@ contains
         ! loop index
         integer :: j
 
+        allocate (y_j, y_jm1, y_jm2, mold=y_0)
+
         w0 = 1.0 + 2.0 / (13.0 * real(s**2))
         temp1 = w0**2 - 1.0
         temp2 = sqrt(temp1)
@@ -294,8 +298,8 @@ contains
 
         ! calculate y_1
         mu_t = w1 * b_jm1
-        y_jm2 = y_0                     ! implicit right-hand side allocation
-        y_jm1 = y_0 + (mu_t * h * F_0)  ! implicit right-hand side allocation
+        y_jm2(:) = y_0
+        y_jm1(:) = y_0 + (mu_t * h * F_0)
 
         c_jm2 = 0.0
         c_jm1 = mu_t
@@ -305,8 +309,6 @@ contains
         dzjm2 = 0.0
         d2zjm1 = 0.0
         d2zjm2 = 0.0
-
-        allocate(y_j, mold=y_0)
 
         do j = 2, s
             zj = 2.0 * w0 * zjm1 - zjm2
@@ -322,12 +324,12 @@ contains
             ! calculate derivative
             call rhs(t_rkc, y_jm1, y_j, p)
 
-            y_j = (1.0 - mu - nu) * y_0 + (mu * y_jm1) + (nu * y_jm2) &
-                + h * mu_t * (y_j - (gamma_t * F_0))
+            y_j(:) = (1.0 - mu - nu) * y_0 + (mu * y_jm1) + (nu * y_jm2) &
+                     + h * mu_t * (y_j - (gamma_t * F_0))
             c_j = (mu * c_jm1) + (nu * c_jm2) + mu_t * (1.0 - gamma_t)
 
-            y_jm2 = y_jm1
-            y_jm1 = y_j
+            y_jm2(:) = y_jm1
+            y_jm1(:) = y_j
 
             c_jm2 = c_jm1
             c_jm1 = c_j

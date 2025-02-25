@@ -70,12 +70,12 @@ contains
         real, intent(in) :: t_0
         real, intent(in) :: t_end
         integer, intent(in) :: nscl
-        real, intent(in), dimension(0:nscl-1) :: y_0
+        real, intent(in), dimension(0:nscl - 1) :: y_0
         real, intent(in), optional :: p(:)
-        real, dimension(0:nscl-1) :: y_end
+        real, dimension(0:nscl - 1) :: y_end
 
-        real, dimension(0:nscl+4) :: work
-        real, dimension(0:nscl-1) :: y_n, F_n, temp_arr, temp_arr2
+        real, dimension(0:nscl + 4) :: work
+        real, dimension(0:nscl - 1) :: y_n, F_n, temp_arr, temp_arr2
         integer nstep, i, m
         real hmax, hmin, err, est
         real fac, temp1, temp2, t_rkc
@@ -298,13 +298,13 @@ contains
         real, intent(in) :: t_rkc
         real, intent(in) :: h
         integer, intent(in) :: nscl
-        real, intent(in), dimension(0:nscl-1) :: y_0, F_0
+        real, intent(in), dimension(0:nscl - 1) :: y_0, F_0
         integer, intent(in) :: s
         real, intent(in), optional :: p(:)
-        real, dimension(0:nscl-1) :: rkc_step
+        real, dimension(0:nscl - 1) :: rkc_step
 
-        real, dimension(0:nscl-1) :: y_j
-        real, dimension(0:nscl-1) :: y_jm1, y_jm2
+        real, dimension(0:nscl - 1) :: y_j
+        real, dimension(0:nscl - 1) :: y_jm1, y_jm2
 
         real w0, temp1, temp2, arg, w1, b_jm1, b_jm2, mu_t
         real c_jm2, c_jm1, zjm1, zjm2, dzjm1, dzjm2, d2zjm1, d2zjm2
@@ -353,7 +353,7 @@ contains
 
             do i = 0, nscl - 1
                 y_j(i) = (1.0 - mu - nu) * y_0(i) + (mu * y_jm1(i)) + (nu * y_jm2(i)) &
-                        + h * mu_t * (y_j(i) - (gamma_t * F_0(i)))
+                         + h * mu_t * (y_j(i) - (gamma_t * F_0(i)))
             end do
             c_j = (mu * c_jm1) + (nu * c_jm2) + mu_t * (1.0 - gamma_t)
 
