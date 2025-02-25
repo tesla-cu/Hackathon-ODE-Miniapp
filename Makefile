@@ -1,8 +1,8 @@
 .SUFFIXES:
 
-F90 := gfortran
+F90 := mpif90
 FFLAGS := -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fPIC -pipe -std=f2018 -J./.build
-LDFLAGS := -lm
+LDFLAGS := -limf
 
 # Og allows some O1 optimizations while making debugging cleaner/clearer than O0
 # also, plain `-g` is equivalent to `-g2`
@@ -20,13 +20,14 @@ OPT1 := -O1 $(optW)
 OPT2 := -O2 $(optW)
 OPT3 := -O3
 OPT4 := -O3 -ffast-math -fno-protect-parens
+OPT5 := -r8 -132 -O2
 
-target := test/miniapp.exe
-sources := src/pprk4.f90 src/miniapp_rkc.f90 src/ncarles_rkc.f90 src/integrators.f90 src/chemistry.f90 src/chem_ode_miniapp.f90
+target := miniapp
+sources := pprk4.f90 miniapp_rkc.f90 ncarles_rkc.f90 integrators.f90 chemistry.f90 chem_ode_miniapp.f90
 
 # the first recipe in this list is the default when running `make` without specifying a recipe.
 fast:
-	$(F90) $(FFLAGS) $(OPT3) $(sources) -o $(target) $(LDFLAGS)
+	$(F90) $(OPT5) -o $(target) $(sources) $(LDFLAGS)
 
 debug:
 	$(F90) $(FFLAGS) $(DBG1) $(sources) -o $(target) $(LDFLAGS)

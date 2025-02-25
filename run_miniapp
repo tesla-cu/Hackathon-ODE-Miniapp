@@ -12,7 +12,7 @@ mkdir $folder/code
 # Moving files
 cp test/user_inputs.nml $folder/code/user_inputs.nml
 cp -a src/. $folder/code/
-
+cp Makefile $folder/code/
 cd $folder/code/
 
 # Load in modules
@@ -22,8 +22,7 @@ module load intel/2023.0.0
 module load openmpi/main
 
 # Compile
-mpif90 -r8 -132 -O2 -o miniapp pprk4.f90 ncarles_rkc.f90 miniapp_rkc.f90 integrators.f90 chemistry.f90 chem_ode_miniapp.f90 -limf
-
+make
 # Creating executable
 cd ../
 cp code/miniapp .
@@ -32,7 +31,7 @@ cat > EXEC_STEP << EXEC
 #!/bin/bash
 #PBS -A UCSG0002
 #PBS -N hybrid_job
-#PBS -q main
+#PBS -q main 
 #PBS -l walltime=00:10:00
 #PBS -l select=1:ncpus=32:mpiprocs=32
 #PBS -o exec.out
