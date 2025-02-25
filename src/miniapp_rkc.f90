@@ -112,6 +112,7 @@ contains
         end if
 
         ! INTEGRATE TO END TIME
+        print *, 'RKC initial dt = ', h_n
         do
             ! perform tentative time step
             y_end = rkc_step(t_rkc, h_n, s, y, ydot, p)
@@ -179,6 +180,7 @@ contains
             end if
 
         end do ! while loop
+        print *, 'RKC final dt, steps = ', h_n, nsteps
 
     end subroutine rkc_integrate
 
@@ -296,8 +298,8 @@ contains
 
         ! calculate y_1
         mu_t = w1 * b_jm1
-        y_jm2(:) = y_0                     
-        y_jm1(:) = y_0 + (mu_t * h * F_0)  
+        y_jm2(:) = y_0
+        y_jm1(:) = y_0 + (mu_t * h * F_0)
 
         c_jm2 = 0.0
         c_jm1 = mu_t
