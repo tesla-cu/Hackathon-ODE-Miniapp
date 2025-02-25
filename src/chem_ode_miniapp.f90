@@ -105,7 +105,6 @@ program chem_ode_miniapp
     if (rank == 0) open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
 
     ! Compute the averages and save
-    if (rank == 0) print *, 'saving initial conditions'
     call save_tracers(time_in_days=.true., verbose=.true.)
 
     ! Time integration loop ----------------------------------------------------
@@ -119,7 +118,6 @@ program chem_ode_miniapp
                     y = tracers(ixl, jyl, :, kzl)
                     p = args(ixl, jyl, :, kzl)
                     call solve_interval(time, time + dt_save, y, p)
-                    print *, 'finished numerical solver for timestep ', nt
                     tracers(ixl, jyl, :, kzl) = y
                 end do
             end do

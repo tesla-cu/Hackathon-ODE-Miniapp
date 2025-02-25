@@ -1,5 +1,5 @@
-COMPILER := cray
-FC := ftn # OR mpif90, etc.
+COMPILER := intel
+FC := mpif90
 SRCDIR := src
 BUILDDIR := build
 
@@ -120,7 +120,7 @@ $(EXECUTABLE): $(OBJECTS)
 # Rule to compile source files into object files
 $(BUILDDIR)/%.o: $(SRCDIR)/%.f90
 	@mkdir -p $(BUILDDIR)
-	$(FC) $(FFLAGS) $(OPTIONS) -c $< -o $@ $(LDFLAGS)
+	$(FC) $(FFLAGS) $(OPTIONS) -c $< -o $@
 
 .PHONY: format
 format:
