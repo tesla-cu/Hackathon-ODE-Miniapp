@@ -180,7 +180,7 @@ contains
             end if
 
         end do ! while loop
-        print *, 'RKC final dt, steps = ', h_n, nsteps
+        print *, 'RKC final dt, steps = ', h_n, nstep
 
     end subroutine rkc_integrate
 
