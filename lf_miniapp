@@ -5,7 +5,8 @@ module load mkl
 module load linaro-forge
 ml
 
-make-profiler-libraries --platform=intel --lib-type=shared
+make-profiler-libraries --platform=cray --lib-type=shared
+mpicc -L$(pwd) -lmap-sampler-pmpi -lmap-sampler -Wl,--eh-frame-hdr -Wl,-rpath=$(pwd) -o cfd.exe miniapp.exe build/*.o
 # Compile
 make profile
 
@@ -23,8 +24,9 @@ cat > EXEC_STEP << EXEC
 
 module reset
 module load mkl
+module load linaro-forge
 
-mpiexec ./miniapp.exe > output.out
+map --connect mpiexec ./miniapp.exe
 EXEC
 
 # Run application

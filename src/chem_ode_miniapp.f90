@@ -23,23 +23,25 @@ program chem_ode_miniapp
         !! 3D size of domain
     integer :: nscl, nargs
     integer :: nt, save_unit, nml_unit
-    integer :: ixl, ixg, jyl, kzl, ip
+    integer :: ixl, ixg, jyl, kzl, ip, jyg, kzg
+    real :: linear_x, linear_y, linear_z, exp_z
        !! MPI variables
     integer :: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d
     integer :: dims(2), coords(2)
     logical :: periods(2)
-    real :: linear_ramp
+       !! time testing 
+    real :: start, finish
     real, allocatable :: tracers(:, :, :, :), y_0(:), y(:)
         !! 3D reacting scalars state vector and 0D initial condition
     real, allocatable :: args(:, :, :, :), p_0(:), p(:)
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
         !! and it's 0D initial condition
-
     namelist /params/ integrator, start_time, end_time, save_name, dt_save, &
         nx, model, temperature, salinity
     namelist /carbonate_ic/ y_0
     namelist /npzd_ic/ y_0
-
+    
+    call cpu_time(start)
     call MPI_INIT(ierr)
     call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
     call MPI_COMM_SIZE(MPI_COMM_WORLD, nprocs, ierr)
@@ -84,17 +86,23 @@ program chem_ode_miniapp
     end if
 
     close (nml_unit)
-    
     ! Add some pt-to-pt variations, added 'l' to end of indices to be extra clear
     do kzl = 1, nx_loc(3)
+        kzg = nx_loc(3) + kzl
+!        linear_z = 0.8 + 0.4 * real(kzg-1)/real(nx(3)-1)
+        exp_z = exp(-real(kzg-1)/real(nx(3)-1)) ! -z decay from 0m to -100m 
         do jyl = 1, nx_loc(2)
+!            jyg = nx_loc(2)*py_rank + jyl ! px_rank goes from 0 to px-1
+!            linear_y = 0.8 + 0.4 * real(jyg-1)/real(nx(2)-1) ! ixg/nx(1) goes from 0.0 to 1.0
             do ixl = 1, nx_loc(1)
                 ! ramp all initial conditions from 80% to 120% of nominal value
                 ! across the entirety of the x-dimension
-                !ixg = nx_loc(1)*px_rank + ixl ! px_rank goes from 0 to px-1
-                !linear_ramp = 0.8 + 0.4 * real(ixg-1)/real(nx(1)-1) ! ixg/nx(1) goes from 0.0 to 1.0
-                tracers(ixl, jyl, :, kzl) = y_0! * linear_ramp
-                args(ixl, jyl, :, kzl) = p_0! * linear_ramp
+!                ixg = nx_loc(1)*px_rank + ixl ! px_rank goes from 0 to px-1
+!                linear_x = 0.8 + 0.4 * real(ixg-1)/real(nx(1)-1) ! ixg/nx(1) goes from 0.0 to 1.0
+                tracers(ixl, jyl, 1:3, kzl) = y_0(1:3) * exp_z 
+                tracers(ixl, jyl, 4:6, kzl) = y_0(4:6) * exp_z 
+                args(ixl, jyl, 1, kzl) = p_0(1) * exp_z 
+                args(ixl, jyl, 2, kzl) = p_0(2) * exp_z
             end do
         end do
     end do
@@ -110,7 +118,6 @@ program chem_ode_miniapp
     ! Time integration loop ----------------------------------------------------
     nt = 0
     do while (time < end_time)
-        print *, 'in while loop'
         ! CHANGE FOR LOOP FOR MPI
         do kzl = 1, nx_loc(3)
             do jyl = 1, nx_loc(2)
@@ -125,7 +132,7 @@ program chem_ode_miniapp
         nt = nt + 1
         time =  time + dt_save
         if (rank == 0) print *, 'saving output', nt
-        call save_tracers(time_in_days=.true.)
+        call save_tracers(time_in_days=.true., verbose=.false.)
 
     end do
 
@@ -135,7 +142,8 @@ program chem_ode_miniapp
     deallocate (tracers, args, y_0, y, p_0, p)
 
     call MPI_FINALIZE(ierr)
-
+    call cpu_time(finish)
+    print '("Time = ",f6.3," seconds.")',finish-start
 contains ! ---------------------------------------------------------------------
 
     subroutine rhs_wrapped(t, y, ydot, p)
