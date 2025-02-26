@@ -116,7 +116,7 @@ program chem_ode_miniapp
     if (rank == 0) open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
 
     ! Compute the averages and save
-    call save_tracers(time_in_days=.true., verbose=.true.)
+    call save_tracers(time_in_days=.true.)
 
     ! Time integration loop ----------------------------------------------------
     nt = 0
@@ -154,7 +154,7 @@ contains ! ---------------------------------------------------------------------
     subroutine save_tracers(time_in_days)
         !! DOCSTRING
         implicit none
-        logical, intent(in), optional :: time_in_days, verbose
+        logical, intent(in), optional :: time_in_days
             !! Optional T/F whether to output time in days instead of seconds
 
         real, parameter :: SEC_PER_DAY = 86400.0
@@ -175,8 +175,7 @@ contains ! ---------------------------------------------------------------------
         end do
         !> This will only change `io_tracer` on rank 0, but printing out to prove it...
         call MPI_Reduce(io_tracer1, io_tracer2, nscl, MPI_REAL8, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-        if (present(verbose) .and. verbose) print *, 'Rank ', rank, 'has io_tracer(1) = ', io_tracer2(1)
-
+        
         write (str_nscl, '(I0)') nscl + 1 ! +1 for time
         fmt = '(A10,'//trim(str_nscl)//'ES15.5)'
 
