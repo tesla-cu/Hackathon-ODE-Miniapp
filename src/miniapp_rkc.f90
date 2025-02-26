@@ -7,7 +7,7 @@ module miniapp_rkc
     !! Kyle Niemeyer. For a version of RKC faithful to the NCAR-LES implementation,
     !! see the `ncarles_rkc` module.
     implicit none
-    private
+    !$acc declare create(rel_tol, abs_tol, s_max)
     public :: initialize_rkc, rkc_integrate, rkc_inplace_step
 
     real, parameter :: UROUND = epsilon(1.0)
@@ -32,6 +32,7 @@ contains
             !! relative tolerance value
         real, intent(in), optional :: atol
             !! absolute tolerance value
+        
 
         rel_tol = 1.0e-6; if (present(rtol)) rel_tol = rtol
         abs_tol = 1.0e-10; if (present(atol)) abs_tol = atol

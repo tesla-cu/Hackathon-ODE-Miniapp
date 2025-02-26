@@ -36,5 +36,5 @@ mpiexec ./miniapp.exe > output.out
 EXEC
 
 # Run application
-qsub < EXEC_STEP
+# qsub < EXEC_STEP
 

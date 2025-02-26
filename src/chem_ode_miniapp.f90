@@ -6,7 +6,7 @@ program chem_ode_miniapp
 
     implicit none ! ------------------------------------------------------------
     ! variables for gpu
-    
+    !$acc declare create(time_derivative, time, dt_save, start_time, end_time, nx, nx_loc, tracers, args, y_0, p_0)
     ! subroutines for gpu
     !$acc routine (save_tracers) 
     !$acc routine (time_derivative) 
