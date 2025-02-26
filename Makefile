@@ -13,7 +13,7 @@ EXECUTABLE := test/miniapp.exe
 
 # ----------------------------------------------------------------------------------------
 ifeq ($(COMPILER),nvidia)
-FFLAGS := -r8 -module ./build # -acc=multicore -Minfo=ftn,all
+FFLAGS := -r8 -module ./build -acc=multicore -Minfo=ftn,all
 OPT2 := -g -O2
 
 else ifeq ($(COMPILER),cray)

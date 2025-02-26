@@ -20,9 +20,9 @@ contains
         real :: b1, b2, b3, b4, b5, b6, b7
 
         associate (t => t); end associate
-        npts = size(y) / nscl
+        npts = size(y) / n
 
-        !$acc kernels
+        !$acc parallel loop private(dcdt, c)
         do ipt = 0, npts-1
             ic = ipt*nscl
             iarg = ipt*nargs
@@ -82,7 +82,6 @@ contains
 
             ydot(ic:ic+nscl) = dcdt
         end do
-        !$acc end kernels
     end subroutine time_derivative
 
 end module chemistry
