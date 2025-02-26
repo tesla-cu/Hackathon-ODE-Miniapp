@@ -136,7 +136,7 @@ program chem_ode_miniapp
         !$acc kernels
         if (rank == 0) print *, 'saving output', nt
         !$acc end kernels
-        call save_tracers(time_in_days=.true., verbose=.false.)
+        call save_tracers(time_in_days=.true.)
 
     end do
 
