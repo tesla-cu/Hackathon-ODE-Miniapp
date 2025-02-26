@@ -22,11 +22,12 @@ program chem_ode_miniapp
     integer :: nt, save_unit, nml_unit
     integer :: ix, jy, kz
 
-    real, allocatable :: tracers(:, :, :, :), y_0(nscl), y(nscl)
-        !! 3D reacting scalars state vector and 0D initial condition
-    real, allocatable :: args(:, :, :, :), p_0(nargs), p(nargs)
+    real, allocatable :: tracers(:, :, :, :)
+        !! 3D reacting scalars state vector
+    real, allocatable :: args(:, :, :, :)
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
-        !! and it's 0D initial condition
+    real :: y_0(nscl), y(nscl)
+    real :: p_0(nargs), p(nargs)
 
     namelist /params/ start_time, end_time, save_name, dt_save, &
         nx, temperature, salinity, y_0
