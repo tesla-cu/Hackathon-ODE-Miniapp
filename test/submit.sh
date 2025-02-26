@@ -1,17 +1,13 @@
 #!/bin/bash
-#PBS -N cce_test
+#PBS -N nvtest
 #PBS -A UCSG0002
 #PBS -l walltime=01:00:00
 #PBS -q develop
 #PBS -j oe
-#PBS -l select=1:ncpus=1:mem=4GB
+#PBS -l select=1:ncpus=1:mem=8GB
 
-module load cce/17
-module load linaro-forge
-
-export TMPDIR=$SCRATCH/temp
-mkdir -p $TMPDIR
+module load nvhpc
 
 ### Run the executable
 # cd /glade/work/ctowery/Hackathon-ODE-Miniapp/test
-map --connect ./miniapp.exe
+./miniapp.exe
