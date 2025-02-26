@@ -26,8 +26,8 @@ contains
         do ipt = 0, npts-1
             ic = ipt*nscl
             iarg = ipt*nargs
-            c(:) = y(ic:ic+nscl)
-            dcdt(:) = ydot(ic:ic+nscl)
+            c(:) = y(ic:ic+nscl-1)
+            dcdt(:) = ydot(ic:ic+nscl-1)
             temp = p(iarg) + 273.15
             salt = p(iarg+1)
 
@@ -80,7 +80,7 @@ contains
             dcdt(6) = b2 * c(2) - a2 * c(1) * c(6) - a4 * c(2) * c(6) + b4 * c(3) + a5 &
                     - b5 * H_qss * c(6) - a6 * c(4) * c(6) + b6 * c(5)
 
-            ydot(ic:ic+nscl) = dcdt
+            ydot(ic:ic+nscl-1) = dcdt
         end do
     end subroutine time_derivative
 
