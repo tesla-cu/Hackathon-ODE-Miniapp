@@ -137,7 +137,7 @@ contains
             y = y_end
             ydot = vtemp1
             nstep = nstep + 1
-            print *, 't_rkc = ', t_rkc,
+            print *, 't_rkc = ', t_rkc
             print *, 'ydot = ', ydot
 
             ! if at t_f, exit loop immediately
