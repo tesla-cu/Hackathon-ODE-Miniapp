@@ -16,6 +16,7 @@ module miniapp_rkc
 
     interface
         subroutine time_derivative(t, y, ydot, p)
+            !$acc routine seq
             real, intent(in) :: t, y(:)
             real, intent(inout) :: ydot(:)
             real, intent(in), optional :: p(:)
@@ -111,8 +112,7 @@ contains
         end if
 
         ! INTEGRATE TO END TIME
-        !$acc loop seq
-        do
+        do !while (t_rkc >= t_f)
             ! perform tentative time step
             y_end = rkc_step(rhs, t_rkc, h_n, s, y, ydot, p)
 
@@ -229,7 +229,6 @@ contains
 
         ! now iterate using nonlinear power method
         sigma1 = 0.0
-        !$acc loop seq
         do iter = 1, itmax
             call rhs(t_rkc, v, Fv, p)
             dF_rms = sqrt(sum((Fv - F)**2))
@@ -312,7 +311,7 @@ contains
         dzjm2 = 0.0
         d2zjm1 = 0.0
         d2zjm2 = 0.0
-        !$acc loop seq
+        
         do j = 2, s
             zj = 2.0 * w0 * zjm1 - zjm2
             dzj = 2.0 * w0 * dzjm1 - dzjm2 + 2.0 * zjm1

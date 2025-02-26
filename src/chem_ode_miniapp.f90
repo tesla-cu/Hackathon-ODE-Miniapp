@@ -8,10 +8,10 @@ program chem_ode_miniapp
     ! variables for gpu
     
     ! subroutines for gpu
-    !$acc routine save_tracers seq
-    !$acc routine time_derivative seq
-    !$acc routine initialize_rkc seq 
-    !$acc routine rkc_integrate seq
+    !$acc routine (save_tracers) 
+    !$acc routine (time_derivative) 
+    !$acc routine (initialize_rkc)  
+    !$acc routine (rkc_integrate) 
 
     character(len=*), parameter :: input_file = "user_inputs.nml"
 
@@ -138,7 +138,7 @@ program chem_ode_miniapp
     call MPI_FINALIZE(ierr)
 contains ! ---------------------------------------------------------------------
     subroutine save_tracers(time_in_days)
-        !$acc rountine
+        !$acc routine seq 
         !! DOCSTRING
         implicit none
         logical, intent(in), optional :: time_in_days

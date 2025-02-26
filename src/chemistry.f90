@@ -7,7 +7,7 @@ module chemistry
 
 contains
     subroutine time_derivative(t, y, ydot, p)
-        !$acc rountine seq
+        !$acc routine seq
         real, intent(in) :: t
         real, intent(in) :: y(nscl), p(nargs)
         real, intent(inout) :: ydot(nscl)
