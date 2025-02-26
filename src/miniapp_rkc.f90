@@ -106,7 +106,7 @@ contains
         end if
 
         ! INTEGRATE TO END TIME
-        do
+        do while (t_rkc < t_f)
             ! perform tentative time step
             y_end = rkc_step(rhs, t_rkc, h_n, s, y, ydot, p)
 
@@ -136,7 +136,7 @@ contains
             nstep = nstep + 1
 
             ! if at t_f, exit loop immediately
-            if (t_rkc >= t_f) exit
+            ! if (t_rkc >= t_f) exit
 
             ! compute adaptive time step, stage count, based on error
             adapt = 10.0
