@@ -35,9 +35,7 @@ program chem_ode_miniapp
     real :: y_0(nscl), p_0(nargs)
 
     namelist /params/ integrator, start_time, end_time, save_name, dt_save, &
-        nx, model, temperature, salinity
-    namelist /carbonate_ic/ y_0
-    namelist /npzd_ic/ y_0
+        nx, model, temperature, salinity, y_0
     
     call cpu_time(start)
     call MPI_INIT(ierr)
@@ -64,9 +62,6 @@ program chem_ode_miniapp
     open (newunit=nml_unit, file=input_file, status="old")
     read (nml_unit, nml=params)
     rewind (nml_unit)
-
-    ! Initialize chemistry, which associates the `compute_chemistry` pointer
-    call initialize_chemistry(trim(model), nscl, nargs)
     
     nx_loc(1) = nx(1) / px
     nx_loc(2) = nx(2) / py
@@ -75,15 +70,9 @@ program chem_ode_miniapp
     allocate(args(nx_loc(1), nx_loc(2), nargs, nx_loc(3)))
 
     ! Read in the chemical initial condition from the input file
-    if (model == 'carbonate') then
-        read (nml_unit, nml=carbonate_ic)
-        p_0(1) = temperature
-        p_0(2) = salinity
-    else if (model == 'npzd') then
-        read (nml_unit, nml=npzd_ic)
-        p_0(1) = temperature
-    end if
-     
+    read (nml_unit, nml=params)
+    p_0(1) = temperature
+    p_0(2) = salinity
     close (nml_unit)
     
     ! Add some pt-to-pt variations, added 'l' to end of indices to be extra clear
@@ -100,10 +89,8 @@ program chem_ode_miniapp
                 ! across the entirety of the x-dimension
                 !ixg = nx_loc(1)*px_rank + ixl ! px_rank goes from 0 to px-1
                 !linear_x = 0.8 + 0.4 * real(ixg-1)/real(nx(1)-1) ! ixg/nx(1) goes from 0.0 to 1.0
-                tracers(ixl, jyl, 1:3, kzl) = y_0(1:3) !* exp_z 
-                tracers(ixl, jyl, 4:6, kzl) = y_0(4:6) !* exp_z 
-                args(ixl, jyl, 1, kzl) = p_0(1) !* exp_z 
-                args(ixl, jyl, 2, kzl) = p_0(2) !* exp_z
+                tracers(ixl, jyl, :, kzl) = y_0(:) !* exp_z 
+                args(ixl, jyl, :, kzl) = p_0
             end do
         end do
     end do
