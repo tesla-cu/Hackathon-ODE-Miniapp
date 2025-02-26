@@ -15,7 +15,7 @@ module miniapp_rkc
     integer :: s_max
 
     interface
-        subroutine time_derivative(t, y, ydot, p)
+        pure subroutine time_derivative(t, y, ydot, p)
             real, intent(in) :: t, y(:)
             real, intent(inout) :: ydot(:)
             real, intent(in), optional :: p(:)
@@ -62,7 +62,7 @@ contains
             !! optional parameters to pass on to rhs subroutine
 
         ! work arrays
-        real, dimension(:), allocatable :: y_end, ydot, vtemp1, vtemp2, eigenv
+        real, dimension(size(y)) :: y_end, ydot, vtemp1, vtemp2, eigenv
         ! internal work arrays: not all may be necessary, haven't figured out minimum
         ! needed working memory. `eigenv` used to be stored in work(4:)
 
@@ -71,10 +71,7 @@ contains
         integer :: ny, nstep, s, i
         real :: t_rkc, hmax, hmin, err, est, adapt, temp1, temp2
 
-        ! Initialize progress variables
-        allocate (y_end, ydot, vtemp1, vtemp2, eigenv, mold=y)
         ny = size(y)
-
         t_rkc = t_i
         nstep = 0
 
@@ -188,11 +185,11 @@ contains
             !! Maximum time step size
         real, intent(in) :: y(:)
             !! Current solution
-        real, intent(in) :: F(:)
+        real, intent(in) :: F(size(y))
             !! Time derivative of solution, dy/dt = F(y)
-        real, intent(inout) :: v(:)
+        real, intent(inout) :: v(size(y))
             !! Estimate of ODE system eigenvalues
-        real, intent(out) :: Fv(:)
+        real, intent(out) :: Fv(size(y))
             !! Time derivative of eigenalues, dv/dt = F(v)
         real, intent(in), optional :: p(:)
             !! optional parameters to pass on to rhs subroutine
@@ -262,15 +259,15 @@ contains
             !! number of stages to compute
         real, intent(in) :: y_0(:)
             !! The current solution
-        real, intent(in) :: F_0(:)
+        real, intent(in) :: F_0(size(y_0))
             !! The time derivative of current solution, dy/dt = F(y)
         real, intent(in), optional :: p(:)
             !! optional parameters to pass on to rhs subroutine
-        real, allocatable :: y_j(:)
+        real :: y_j(size(y_0))
             !! The solution at the end of the step
 
         ! internal work memory
-        real, dimension(:), allocatable :: y_jm1, y_jm2
+        real, dimension(size(y_0)) :: y_jm1, y_jm2
 
         ! variable RK stage coefficients, and related variables
         real :: w0, temp1, temp2, arg, w1, b_jm1, b_jm2, mu_t
@@ -279,8 +276,6 @@ contains
 
         ! loop index
         integer :: j
-
-        allocate (y_j, y_jm1, y_jm2, mold=y_0)
 
         w0 = 1.0 + 2.0 / (13.0 * real(s**2))
         temp1 = w0**2 - 1.0

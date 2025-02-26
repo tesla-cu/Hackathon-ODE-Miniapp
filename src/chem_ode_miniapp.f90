@@ -19,15 +19,15 @@ program chem_ode_miniapp
         !! temperature [deg C], and salinity [units]
     integer :: nx(3)
         !! 3D size of domain
-    integer :: nt, save_unit, nml_unit
+    integer :: nt, save_unit, nml_unit, nflat
     integer :: ix, jy, kz
 
-    real, allocatable :: tracers(:, :, :, :)
+    real, allocatable :: tracers(:, :, :, :), y(:)
         !! 3D reacting scalars state vector
-    real, allocatable :: args(:, :, :, :)
+    real, allocatable :: args(:, :, :, :), p(:)
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
-    real :: y_0(nscl), y(nscl)
-    real :: p_0(nargs), p(nargs)
+    real :: y_0(nscl)
+    real :: p_0(nargs)
 
     namelist /params/ start_time, end_time, save_name, dt_save, &
         nx, temperature, salinity, y_0
@@ -37,6 +37,7 @@ program chem_ode_miniapp
     open (newunit=nml_unit, file=input_file, status="old")
     read (nml_unit, nml=params)
     rewind (nml_unit)
+    close (nml_unit)
 
     p_0(1) = temperature
     p_0(2) = salinity
@@ -45,8 +46,8 @@ program chem_ode_miniapp
     ! z-direction is how NCAR-LES does it currently. This is sure
     ! to be inefficient and should be changed as part of testing.
     ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
-    allocate (tracers(nx(1), nx(2), nscl, nx(3)))
-    allocate (args(nx(1), nx(2), nargs, nx(3)))
+    allocate (tracers(nx(1), nx(2), nscl, nx(3)), y(nx(1)*nscl))
+    allocate (args(nx(1), nx(2), nargs, nx(3)), p(nx(1)*nargs))
 
     !TODO: Add perturbations to the ICs, like sinusoids or random noise, so that
     !      each spatial point solves a slightly different trajectory in state space
@@ -59,7 +60,20 @@ program chem_ode_miniapp
         end do
     end do
 
-    close (nml_unit)
+    select case(nflat)
+    case(0)
+        npts = 1
+
+    case(1)
+        npts = nx(1)
+
+    case(2)
+        npts = nx(1) * nx(2)
+
+    case(3)
+        npts = product(nx)
+    end select
+    allocate(y(0:npts*nscl-1), p(0:npts*narg-1))
 
     call initialize_rkc(1e-6, 1e-10)
 
@@ -71,16 +85,44 @@ program chem_ode_miniapp
     nt = 0
     do while (time < end_time)
 
-        do kz = 1, nx(3)
-            do jy = 1, nx(2)
-                do ix = 1, nx(1)
-                    y = tracers(ix, jy, :, kz)
-                    p = args(ix, jy, :, kz)
-                    call rkc_integrate(time_derivative, time, time + dt_save, y, p)
-                    tracers(ix, jy, :, kz) = y
+        select case(nflat)
+        case(0)
+            do kz = 1, nx(3)
+                do jy = 1, nx(2)
+                    do ix = 1, nx(1)
+                        y(0:) = tracers(ix, jy, :, kz)
+                        p(0:) = args(ix, jy, :, kz)
+                        call rkc_integrate(time_derivative, time, time + dt_save, y, p)
+                        tracers(ix, jy, 1:, kz) = y(0:)
+                    end do
                 end do
             end do
-        end do
+
+        case(1)
+            do kz = 1, nx(3)
+                do jy = 1, nx(2)
+                    y(0:) = pack(tracers(:, jy, :, kz))
+                    p(0:) = pack(args(:, jy, :, kz))
+                    call rkc_integrate(time_derivative, time, time + dt_save, y, p)
+                    tracers(1:, jy, 1:, kz) = reshape(y, [nx(1), nscl])
+                end do
+            end do
+
+        case(2)
+            do kz = 1, nx(3)
+                y(0:) = pack(tracers(:, :, :, kz))
+                p(0:) = pack(args(:, :, :, kz))
+                call rkc_integrate(time_derivative, time, time + dt_save, y, p)
+                tracers(1:, 1:, 1:, kz) = reshape(y, [nx(1), nx(2), nscl])
+            end do
+
+        case(3)
+            y(0:) = pack(tracers)
+            p(0:) = pack(args)
+            call rkc_integrate(time_derivative, time, time + dt_save, y, p)
+            tracers(1:, 1:, 1:, 1:) = reshape(y, [nx(1), nx(2), nx(3), nscl])
+
+        end select
 
         time = time + dt_save
 
