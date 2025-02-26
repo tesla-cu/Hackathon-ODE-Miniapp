@@ -1,16 +1,13 @@
 program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     use mpi
-    use chemistry, only: initialize_chemistry, compute_chemistry
-    use integrators, only: initialize_integrator, finalize_integrator, &
-                           solve_interval
+    use chemistry, only: time_derivative, nscl, nargs
+    use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
     implicit none ! ------------------------------------------------------------
 
     character(len=*), parameter :: input_file = "user_inputs.nml"
 
-    character(len=20) :: model, integrator
-        !! configuration choices
     character(len=128) :: save_name
         !! output filenames
     real :: dt_save = 1e99
@@ -21,7 +18,6 @@ program chem_ode_miniapp
         !! temperature [deg C], and salinity [units]
     integer :: nx(3), nx_loc(3)
         !! 3D size of domain
-    integer :: nscl, nargs
     integer :: nt, save_unit, nml_unit
     integer :: ixl, ixg, jyl, kzl, ip, jyg, kzg
     real :: linear_x, linear_y, linear_z, exp_z
@@ -31,11 +27,13 @@ program chem_ode_miniapp
     logical :: periods(2)
        !! time testing 
     real :: start, finish
-    real, allocatable :: tracers(:, :, :, :), y_0(:), y(:)
+    real, allocatable :: tracers(:, :, :, :)
         !! 3D reacting scalars state vector and 0D initial condition
-    real, allocatable :: args(:, :, :, :), p_0(:), p(:)
+    real, allocatable :: args(:, :, :, :)
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
         !! and it's 0D initial condition
+    real :: y_0(nscl), p_0(nargs)
+
     namelist /params/ integrator, start_time, end_time, save_name, dt_save, &
         nx, model, temperature, salinity
     namelist /carbonate_ic/ y_0
@@ -68,14 +66,13 @@ program chem_ode_miniapp
     rewind (nml_unit)
 
     ! Initialize chemistry, which associates the `compute_chemistry` pointer
-    !print *, 'chem model = ', model
     call initialize_chemistry(trim(model), nscl, nargs)
     
     nx_loc(1) = nx(1) / px
     nx_loc(2) = nx(2) / py
     nx_loc(3) = nx(3)
-    allocate(tracers(nx_loc(1), nx_loc(2), nscl, nx_loc(3)), y_0(nscl), y(nscl))
-    allocate(args(nx_loc(1), nx_loc(2), nargs, nx_loc(3)), p_0(nargs), p(nargs))
+    allocate(tracers(nx_loc(1), nx_loc(2), nscl, nx_loc(3)))
+    allocate(args(nx_loc(1), nx_loc(2), nargs, nx_loc(3)))
 
     ! Read in the chemical initial condition from the input file
     if (model == 'carbonate') then
@@ -129,10 +126,7 @@ program chem_ode_miniapp
         do kzl = 1, nx_loc(3)
             do jyl = 1, nx_loc(2)
                 do ixl = 1, nx_loc(1)
-                    y = tracers(ixl, jyl, :, kzl)
-                    p = args(ixl, jyl, :, kzl)
-                    call solve_interval(time, time + dt_save, y, p)
-                    tracers(ixl, jyl, :, kzl) = y
+                    call rkc_integrate(time_derivative, time, time + dt_save, tracers(ixl, jyl, :, kzl), args(ixl, jyl, :, kzl))
                 end do
             end do
         end do
@@ -148,8 +142,7 @@ program chem_ode_miniapp
 
     ! Finalization -------------------------------------------------------------
     close (save_unit)
-    call finalize_integrator()
-    deallocate (tracers, args, y_0, y, p_0, p)
+    deallocate (tracers, args)
 
     call MPI_FINALIZE(ierr)
     call cpu_time(finish)
@@ -158,15 +151,7 @@ program chem_ode_miniapp
     !$acc end kernels
 contains ! ---------------------------------------------------------------------
 
-    subroutine rhs_wrapped(t, y, ydot, p)
-        real, intent(in) :: t, y(:)
-        real, intent(inout) :: ydot(:)
-        real, intent(in), optional :: p(:)
-        associate (t => t); end associate ! suppress unused dummy argument warning
-        call compute_chemistry(y, ydot, p)
-    end subroutine rhs_wrapped
-
-    subroutine save_tracers(time_in_days, verbose)
+    subroutine save_tracers(time_in_days)
         !! DOCSTRING
         implicit none
         logical, intent(in), optional :: time_in_days, verbose
