@@ -3,7 +3,7 @@ FC := nvfortran # OR mpif90, etc.
 SRCDIR := src
 BUILDDIR := build
 
-SOURCES := src/integrand.f90 src/rkc_integrator.f90 src/chemistry.f90 src/chem_ode_miniapp.f90
+SOURCES := src/miniapp_rkc.f90 src/chemistry.f90 src/chem_ode_miniapp.f90
 
 # Generate corresponding object file paths in the build directory
 OBJECTS := $(patsubst $(SRCDIR)/%.f90, $(BUILDDIR)/%.o, $(SOURCES))
@@ -13,7 +13,7 @@ EXECUTABLE := test/miniapp.exe
 
 # ----------------------------------------------------------------------------------------
 ifeq ($(COMPILER),nvidia)
-FFLAGS := -r8 -acc=multicore -Minfo=ftn,all -module ./build 
+FFLAGS := -r8 -module ./build # -acc=multicore -Minfo=ftn,all
 OPT2 := -g -O2
 
 else ifeq ($(COMPILER),cray)
@@ -32,7 +32,7 @@ DBG3 := -O0 -G0 -Ktrap=fp -eD -m1 -h add_paren # -O0 implies fp0, scalar0, vecto
 #    Every way in which you can force Cray to do math slower is turned on
 OPT1 := -O0 -G0 -h add_paren # -O0 implies fp0, scalar0, vector0, etc.
 # -- "Normal" floating-point operations
-OPT2 := -O2 -G2 
+OPT2 := -O2 -G2
 # -- Very optimized FLOPs, any way in which you can trade accuracy for speed is turned on.
 OPT3 := -O2 -G2 -h scalar3,vector3,fp4 # fma on at fp1 or higher
 
@@ -122,7 +122,7 @@ $(EXECUTABLE): $(OBJECTS)
 # Rule to compile source files into object files
 $(BUILDDIR)/%.o: $(SRCDIR)/%.f90
 	@mkdir -p $(BUILDDIR)
-	$(FC) $(FFLAGS) $(OPTIONS) -c $< -o $@ 
+	$(FC) $(FFLAGS) $(OPTIONS) -c $< -o $@
 
 .PHONY: format
 format:
