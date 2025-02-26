@@ -34,8 +34,8 @@ program chem_ode_miniapp
         !! and it's 0D initial condition
     real :: y_0(nscl), p_0(nargs)
 
-    namelist /params/ integrator, start_time, end_time, save_name, dt_save, &
-        nx, model, temperature, salinity, y_0
+    namelist /params/ start_time, end_time, save_name, dt_save, &
+        nx, temperature, salinity, y_0
     
     call cpu_time(start)
     call MPI_INIT(ierr)
@@ -97,7 +97,7 @@ program chem_ode_miniapp
     !$acc end parallel loop
     !$acc exit data delete(y_0, p_0)
     ! Initialize the ODE solver, which associates the `solve_interval` pointer
-    call initialize_integrator(integrator, rhs_wrapped, y_0, 1e-8, 1e-6, 1e-10)
+    call initialize_rkc(1e-6, 1e-10)
 
     ! Open file on ROOT for saving tracer history
     if (rank == 0) open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
