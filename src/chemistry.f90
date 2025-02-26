@@ -7,16 +7,19 @@ module chemistry
 
 contains
 
-    subroutine compute_chemistry(c, dcdt, args)
-        real, intent(in) :: c(nscl), args(nargs)
-        real, intent(inout) :: dcdt(nscl)
+    subroutine time_derivative(t, y, ydot, p)
+        real, intent(in) :: t
+        real, intent(in) :: y(nscl), p(nargs)
+        real, intent(inout) :: ydot(nscl)
 
         real :: K1s, K2s, Kw, Kb, Rgas, salt, temp, H_qss
         real :: a1, a2, a3, a4, a5, a6, a7
         real :: b1, b2, b3, b4, b5, b6, b7
 
-        temp = args(1) + 273.15
-        salt = args(2)
+        associate (t => t); end associate ! suppress unused dummy argument warning
+
+        temp = p(1) + 273.15
+        salt = p(2)
 
         K1s = exp(-2307.1266 / temp + 2.83655 - 1.5529413 * log(temp) + &
                   (-4.0484 / temp - 0.20760841) * (salt**0.5) + 0.08468345 * salt - &
@@ -49,24 +52,24 @@ contains
         b6 = (a6 * Kw / Kb) * (1.0e6)
         b7 = a7 * K2s / Kb
 
-        H_qss = (a1 * c(1) + b3 * c(2) + a5) / (b1 * c(2) + a3 * c(3) + b5 * c(6))
+        H_qss = (a1 * y(1) + b3 * y(2) + a5) / (b1 * y(2) + a3 * y(3) + b5 * y(6))
 
-        dcdt(1) = b1 * c(2) * H_qss + b2 * c(2) - a1 * c(1) - a2 * c(1) * c(6)
+        ydot(1) = b1 * y(2) * H_qss + b2 * y(2) - a1 * y(1) - a2 * y(1) * y(6)
 
-        dcdt(2) = a1 * c(1) + a2 * c(1) * c(6) - b1 * c(2) * H_qss - b2 * c(2) &
-                  + a3 * c(3) * H_qss - b3 * c(2) - a4 * c(2) * c(6) + b4 * c(3) &
-                  + a7 * c(3) * c(4) - b7 * c(5) * c(2)
+        ydot(2) = a1 * y(1) + a2 * y(1) * y(6) - b1 * y(2) * H_qss - b2 * y(2) &
+                  + a3 * y(3) * H_qss - b3 * y(2) - a4 * y(2) * y(6) + b4 * y(3) &
+                  + a7 * y(3) * y(4) - b7 * y(5) * y(2)
 
-        dcdt(3) = -a3 * c(3) * H_qss + b3 * c(2) + a4 * c(2) * c(6) - b4 * c(3) &
-                  - a7 * c(3) * c(4) + b7 * c(5) * c(2)
+        ydot(3) = -a3 * y(3) * H_qss + b3 * y(2) + a4 * y(2) * y(6) - b4 * y(3) &
+                  - a7 * y(3) * y(4) + b7 * y(5) * y(2)
 
-        dcdt(4) = -a6 * c(4) * c(6) + b6 * c(5) - a7 * c(3) * c(4) + b7 * c(5) * c(2)
+        ydot(4) = -a6 * y(4) * y(6) + b6 * y(5) - a7 * y(3) * y(4) + b7 * y(5) * y(2)
 
-        dcdt(5) = a6 * c(4) * c(6) - b6 * c(5) + a7 * c(3) * c(4) - b7 * c(5) * c(2)
+        ydot(5) = a6 * y(4) * y(6) - b6 * y(5) + a7 * y(3) * y(4) - b7 * y(5) * y(2)
 
-        dcdt(6) = b2 * c(2) - a2 * c(1) * c(6) - a4 * c(2) * c(6) + b4 * c(3) + a5 &
-                  - b5 * H_qss * c(6) - a6 * c(4) * c(6) + b6 * c(5)
+        ydot(6) = b2 * y(2) - a2 * y(1) * y(6) - a4 * y(2) * y(6) + b4 * y(3) + a5 &
+                  - b5 * H_qss * y(6) - a6 * y(4) * y(6) + b6 * y(5)
 
-    end subroutine compute_chemistry
+    end subroutine time_derivative
 
 end module chemistry

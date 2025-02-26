@@ -14,7 +14,7 @@ module miniapp_rkc
     real :: rel_tol, abs_tol
     integer :: s_max
 
-    abstract interface
+    interface
         subroutine time_derivative(t, y, ydot, p)
             real, intent(in) :: t, y(:)
             real, intent(inout) :: ydot(:)

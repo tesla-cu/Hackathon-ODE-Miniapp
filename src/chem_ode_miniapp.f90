@@ -2,7 +2,7 @@ program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     !!
 
-    use chemistry, only: compute_chemistry, nscl, nargs
+    use chemistry, only: time_derivative, nscl, nargs
     use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
     implicit none ! ------------------------------------------------------------
@@ -79,7 +79,7 @@ program chem_ode_miniapp
                 do ix = 1, nx(1)
                     y = tracers(ix, jy, :, kz)
                     p = args(ix, jy, :, kz)
-                    call rkc_integrate(compute_chemistry, time, time + dt_save, y, p)
+                    call rkc_integrate(time_derivative, time, time + dt_save, y, p)
                     tracers(ix, jy, :, kz) = y
                 end do
             end do
@@ -98,14 +98,6 @@ program chem_ode_miniapp
     deallocate (tracers, args, y_0, y, p_0, p)
 
 contains ! ---------------------------------------------------------------------
-
-    subroutine rhs_wrapped(t, y, ydot, p)
-        real, intent(in) :: t, y(:)
-        real, intent(inout) :: ydot(:)
-        real, intent(in), optional :: p(:)
-        associate (t => t); end associate ! suppress unused dummy argument warning
-        call compute_chemistry(y, ydot, p)
-    end subroutine rhs_wrapped
 
     subroutine save_tracers(time_in_days)
         !! DOCSTRING
