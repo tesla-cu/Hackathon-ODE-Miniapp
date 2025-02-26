@@ -53,6 +53,7 @@ contains
         y(:) = rkc_step(t, dt, s_max, y, ydot, p)
     end subroutine rkc_inplace_step
 
+    !#acc routine serial
     subroutine rkc_integrate(t_i, t_f, y, p)
         !! Integrate forward in time using adaptive Runge-Kutta-Chebyshev as an
         !! inner timestepper for stiff chemistry

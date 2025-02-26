@@ -74,7 +74,6 @@ program chem_ode_miniapp
     nx_loc(1) = nx(1) / px
     nx_loc(2) = nx(2) / py
     nx_loc(3) = nx(3)
-
     allocate(tracers(nx_loc(1), nx_loc(2), nscl, nx_loc(3)), y_0(nscl), y(nscl))
     allocate(args(nx_loc(1), nx_loc(2), nargs, nx_loc(3)), p_0(nargs), p(nargs))
 
@@ -87,31 +86,32 @@ program chem_ode_miniapp
         read (nml_unit, nml=npzd_ic)
         p_0(1) = temperature
     end if
-
+     
     close (nml_unit)
+    
     ! Add some pt-to-pt variations, added 'l' to end of indices to be extra clear
-    !$acc parallel loop collapse(3) copyin(data)
+    !$acc parallel loop collapse(3) copyin(y_0, p_0) copyout(tracers, args)
     do kzl = 1, nx_loc(3)
-        kzg = nx_loc(3) + kzl
-!        linear_z = 0.8 + 0.4 * real(kzg-1)/real(nx(3)-1)
-        exp_z = exp(-real(kzg-1)/real(nx(3)-1)) ! -z decay from 0m to -100m 
+        !kzg = nx_loc(3) + kzl
+        !linear_z = 0.8 + 0.4 * real(kzg-1)/real(nx(3)-1)
+        !exp_z = exp(-real(kzg-1)/real(nx(3)-1)) ! -z decay from 0m to -100m 
         do jyl = 1, nx_loc(2)
-!            jyg = nx_loc(2)*py_rank + jyl ! px_rank goes from 0 to px-1
-!            linear_y = 0.8 + 0.4 * real(jyg-1)/real(nx(2)-1) ! ixg/nx(1) goes from 0.0 to 1.0
+            !jyg = nx_loc(2)*py_rank + jyl ! px_rank goes from 0 to px-1
+            !linear_y = 0.8 + 0.4 * real(jyg-1)/real(nx(2)-1) ! ixg/nx(1) goes from 0.0 to 1.0
             do ixl = 1, nx_loc(1)
                 ! ramp all initial conditions from 80% to 120% of nominal value
                 ! across the entirety of the x-dimension
-!                ixg = nx_loc(1)*px_rank + ixl ! px_rank goes from 0 to px-1
-!                linear_x = 0.8 + 0.4 * real(ixg-1)/real(nx(1)-1) ! ixg/nx(1) goes from 0.0 to 1.0
-                tracers(ixl, jyl, 1:3, kzl) = y_0(1:3) * exp_z 
-                tracers(ixl, jyl, 4:6, kzl) = y_0(4:6) * exp_z 
-                args(ixl, jyl, 1, kzl) = p_0(1) * exp_z 
-                args(ixl, jyl, 2, kzl) = p_0(2) * exp_z
+                !ixg = nx_loc(1)*px_rank + ixl ! px_rank goes from 0 to px-1
+                !linear_x = 0.8 + 0.4 * real(ixg-1)/real(nx(1)-1) ! ixg/nx(1) goes from 0.0 to 1.0
+                tracers(ixl, jyl, 1:3, kzl) = y_0(1:3) !* exp_z 
+                tracers(ixl, jyl, 4:6, kzl) = y_0(4:6) !* exp_z 
+                args(ixl, jyl, 1, kzl) = p_0(1) !* exp_z 
+                args(ixl, jyl, 2, kzl) = p_0(2) !* exp_z
             end do
         end do
     end do
     !$acc end parallel loop
-
+    !$acc exit data delete(y_0, p_0)
     ! Initialize the ODE solver, which associates the `solve_interval` pointer
     call initialize_integrator(integrator, rhs_wrapped, y_0, 1e-8, 1e-6, 1e-10)
 
@@ -125,7 +125,7 @@ program chem_ode_miniapp
     nt = 0
     do while (time < end_time)
         ! CHANGE FOR LOOP FOR MPI
-        !$acc parallel loop collapse(3) copyin(data)
+        !$acc parallel loop collapse(3) copyin(tracers, args)
         do kzl = 1, nx_loc(3)
             do jyl = 1, nx_loc(2)
                 do ixl = 1, nx_loc(1)
@@ -139,7 +139,9 @@ program chem_ode_miniapp
         !$acc end parallel loop
         nt = nt + 1
         time =  time + dt_save
+        !$acc kernels
         if (rank == 0) print *, 'saving output', nt
+        !$acc end kernels
         call save_tracers(time_in_days=.true., verbose=.false.)
 
     end do
@@ -151,7 +153,9 @@ program chem_ode_miniapp
 
     call MPI_FINALIZE(ierr)
     call cpu_time(finish)
+    !$acc kernels
     print '("Time = ",f6.3," seconds.")',finish-start
+    !$acc end kernels
 contains ! ---------------------------------------------------------------------
 
     subroutine rhs_wrapped(t, y, ydot, p)

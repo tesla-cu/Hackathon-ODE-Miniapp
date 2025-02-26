@@ -1,13 +1,19 @@
 #!/bin/sh
 # Load in modules
+module load ncarenv
 module reset
 module load mkl
 module load nvhpc
-module load openmpi
+module load cray-mpich
 ml
 
 # Compile
-mpif90 -acc -gpu=cc80 -Minfo=accel -c src/chem_ode_miniapp.f90 -o build/chem_ode_miniapp.o
+nvfortran -g -O2 -acc -fast -c src/ncarles_rkc.f90
+nvfortran -g -O2 -acc -fast -c src/pprk4.f90
+nvfortran -g -O2 -acc -fast -c src/integrators.f90
+nvfortran -g -O2 -acc -fast -c src/chemistry.f90
+nvfortran -g -O2 -acc -fast -c src/chem_ode_miniapp.f90
+nvfortran -r8 -acc=multicore -Minfo=ftn,all -module ./build -g -O2
 # Creating executable
 cd test/
 
@@ -21,10 +27,12 @@ cat > EXEC_STEP << EXEC
 #PBS -j oe
 #PBS -l gpu_type=a100
 
+
+module load ncarenv
 module reset
 module load mkl
 module load nvhpc
-module load openmpi
+module load cray-mpich
 
 mpiexec ./miniapp.exe > output.out
 EXEC
