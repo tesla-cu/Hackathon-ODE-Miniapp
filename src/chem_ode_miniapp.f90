@@ -44,8 +44,8 @@ program chem_ode_miniapp
     ! z-direction is how NCAR-LES does it currently. This is sure
     ! to be inefficient and should be changed as part of testing.
     ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
-    allocate (tracers(nx(1), nx(2), nscl, nx(3)), y_0(nscl), y(nscl))
-    allocate (args(nx(1), nx(2), nargs, nx(3)), p_0(nargs), p(nargs))
+    allocate (tracers(nx(1), nx(2), nscl, nx(3)))
+    allocate (args(nx(1), nx(2), nargs, nx(3)))
 
     !TODO: Add perturbations to the ICs, like sinusoids or random noise, so that
     !      each spatial point solves a slightly different trajectory in state space
@@ -91,7 +91,7 @@ program chem_ode_miniapp
 
     ! Finalization -------------------------------------------------------------
     close (save_unit)
-    deallocate (tracers, args, y_0, y, p_0, p)
+    deallocate (tracers, args)
 
 contains ! ---------------------------------------------------------------------
 
