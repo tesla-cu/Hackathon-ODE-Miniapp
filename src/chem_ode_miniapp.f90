@@ -2,16 +2,13 @@ program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     !!
 
-    use chemistry, only: initialize_chemistry, compute_chemistry
-    use integrators, only: initialize_integrator, finalize_integrator, &
-                           solve_interval
+    use chemistry, only: compute_chemistry, nscl, nargs
+    use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
     implicit none ! ------------------------------------------------------------
 
     character(len=*), parameter :: input_file = "user_inputs.nml"
 
-    character(len=20) :: model, integrator
-        !! configuration choices
     character(len=128) :: save_name
         !! output filenames
     real :: dt_save = 1e99
@@ -22,7 +19,6 @@ program chem_ode_miniapp
         !! temperature [deg C], and salinity [units]
     integer :: nx(3)
         !! 3D size of domain
-    integer :: nscl, nargs
     integer :: nt, save_unit, nml_unit
     integer :: ix, jy, kz
 
@@ -32,10 +28,8 @@ program chem_ode_miniapp
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
         !! and it's 0D initial condition
 
-    namelist /params/ integrator, start_time, end_time, save_name, dt_save, &
-        nx, model, temperature, salinity
-    namelist /carbonate_ic/ y_0
-    namelist /npzd_ic/ y_0
+    namelist /params/ start_time, end_time, save_name, dt_save, &
+        nx, temperature, salinity, y_0
 
     ! Configuration and Setup --------------------------------------------------
     ! Read namelists from input file
@@ -43,9 +37,8 @@ program chem_ode_miniapp
     read (nml_unit, nml=params)
     rewind (nml_unit)
 
-    ! Initialize chemistry, which associates the `compute_chemistry` pointer
-    print *, 'chem model = ', model
-    call initialize_chemistry(trim(model), nscl, nargs)
+    p_0(1) = temperature
+    p_0(2) = salinity
 
     ! NOTE: allocation of nscl/nargs as intermediate dimension before
     ! z-direction is how NCAR-LES does it currently. This is sure
@@ -53,16 +46,6 @@ program chem_ode_miniapp
     ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
     allocate (tracers(nx(1), nx(2), nscl, nx(3)), y_0(nscl), y(nscl))
     allocate (args(nx(1), nx(2), nargs, nx(3)), p_0(nargs), p(nargs))
-
-    ! Read in the chemical initial condition from the input file
-    if (model == 'carbonate') then
-        read (nml_unit, nml=carbonate_ic)
-        p_0(1) = temperature
-        p_0(2) = salinity
-    else if (model == 'npzd') then
-        read (nml_unit, nml=npzd_ic)
-        p_0(1) = temperature
-    end if
 
     !TODO: Add perturbations to the ICs, like sinusoids or random noise, so that
     !      each spatial point solves a slightly different trajectory in state space
@@ -79,7 +62,7 @@ program chem_ode_miniapp
 
     ! Initialize the ODE solver, which associates the `solve_interval` pointer
     print *, 'integrator = ', integrator
-    call initialize_integrator(integrator, rhs_wrapped, y_0, 1e-8, 1e-6, 1e-10)
+    call initialize_rkc(1e-6, 1e-10)
 
     ! Open file for saving tracer history
     open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
@@ -96,7 +79,7 @@ program chem_ode_miniapp
                 do ix = 1, nx(1)
                     y = tracers(ix, jy, :, kz)
                     p = args(ix, jy, :, kz)
-                    call solve_interval(time, time + dt_save, y, p)
+                    call rkc_integrate(compute_chemistry, time, time + dt_save, y, p)
                     tracers(ix, jy, :, kz) = y
                 end do
             end do
@@ -112,7 +95,6 @@ program chem_ode_miniapp
 
     ! Finalization -------------------------------------------------------------
     close (save_unit)
-    call finalize_integrator()
     deallocate (tracers, args, y_0, y, p_0, p)
 
 contains ! ---------------------------------------------------------------------

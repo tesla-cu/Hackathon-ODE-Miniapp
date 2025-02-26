@@ -1,10 +1,9 @@
-COMPILER := cray
-FC := ftn # OR mpif90, etc.
+COMPILER := nvidia
+FC := nvfortran # OR mpif90, etc.
 SRCDIR := src
 BUILDDIR := build
 
-SOURCES := src/pprk4.f90 src/ncarles_rkc.f90 src/miniapp_rkc.f90 src/integrators.f90 \
-src/chemistry.f90 src/chem_ode_miniapp.f90
+SOURCES := src/integrand.f90 src/rkc_integrator.f90 src/chemistry.f90 src/chem_ode_miniapp.f90
 
 # Generate corresponding object file paths in the build directory
 OBJECTS := $(patsubst $(SRCDIR)/%.f90, $(BUILDDIR)/%.o, $(SOURCES))
@@ -13,7 +12,11 @@ OBJECTS := $(patsubst $(SRCDIR)/%.f90, $(BUILDDIR)/%.o, $(SOURCES))
 EXECUTABLE := test/miniapp.exe
 
 # ----------------------------------------------------------------------------------------
-ifeq ($(COMPILER),cray)
+ifeq ($(COMPILER),nvidia)
+FFLAGS := -r8 -module ./build # -acc=multicore -Minfo=ftn,all
+OPT2 := -g -O2
+
+else ifeq ($(COMPILER),cray)
 
 FFLAGS := -s default64 -f PIC -ef -J ./build
 LDFLAGS := # I don't think anything is necessary here
@@ -29,7 +32,7 @@ DBG3 := -O0 -G0 -Ktrap=fp -eD -m1 -h add_paren # -O0 implies fp0, scalar0, vecto
 #    Every way in which you can force Cray to do math slower is turned on
 OPT1 := -O0 -G0 -h add_paren # -O0 implies fp0, scalar0, vector0, etc.
 # -- "Normal" floating-point operations
-OPT2 := -O2 -G2 -eo
+OPT2 := -O2 -G2
 # -- Very optimized FLOPs, any way in which you can trade accuracy for speed is turned on.
 OPT3 := -O2 -G2 -h scalar3,vector3,fp4 # fma on at fp1 or higher
 
@@ -58,7 +61,7 @@ OPT1 := -g -O2 -fp-model=strict,source -fprotect-parens -prec-div
 # -- "Normal" floating-point operations
 OPT2 := -g -O2
 # -- Very optimized FLOPs, any way in which you can trade accuracy for speed is turned on.
-OPT3 := -g -O2 -fp-model=fast=1 -fast-transcendentals -fma -no-prec-div -nostandard-realloc-lhs
+OPT3 := -g -O2 -fp-model=fast -fast-transcendentals -fma -no-prec-div -nostandard-realloc-lhs
 
 # USE THESE FOR MAXIMUM COMPILER OPTIMIZATION
 # -- Once O3 and ipo are turned on, I don't think you can use -g anymore.
@@ -119,7 +122,7 @@ $(EXECUTABLE): $(OBJECTS)
 # Rule to compile source files into object files
 $(BUILDDIR)/%.o: $(SRCDIR)/%.f90
 	@mkdir -p $(BUILDDIR)
-	$(FC) $(FFLAGS) $(OPTIONS) -c $< -o $@ $(LDFLAGS)
+	$(FC) $(FFLAGS) $(OPTIONS) -c $< -o $@
 
 .PHONY: format
 format:
