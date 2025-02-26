@@ -108,7 +108,6 @@ contains
         end if
 
         ! INTEGRATE TO END TIME
-        print *, 'RKC initial dt = ', h_n
         do
             ! perform tentative time step
             y_end = rkc_step(rhs, t_rkc, h_n, s, y, ydot, p)
@@ -166,7 +165,6 @@ contains
             if (s > s_max) then
                 s = s_max
                 h_n = real((s**2 - 1) / (1.54 * rho))
-                print *, 'limiting s and h_in, checking h_n/hmin = ', h_n / hmin
             end if
             h_n = max(hmin, min(hmax, h_n)) ! bound h_n by min/max values
 
@@ -176,7 +174,6 @@ contains
             end if
 
         end do ! while loop
-        print *, 'RKC final dt, steps = ', h_n, nstep
 
     end subroutine rkc_integrate
 
