@@ -9,8 +9,9 @@ contains
 
     pure subroutine time_derivative(t, y, ydot, p)
         real, intent(in) :: t
-        real, contiguous, intent(in) :: y(0:), p(0:)
-        real, contiguous, intent(inout) :: ydot(0:)
+        real, intent(in) :: y(0:) ! explicitly setting lbound inside this routine
+        real, intent(inout) :: ydot(0:) ! same
+        real, intent(in), optional :: p(0:) ! same
 
         real :: c(nscl), dcdt(nscl)
         integer :: npts, ipt, ic, iarg
@@ -24,8 +25,8 @@ contains
         do ipt = 0, npts-1
             ic = ipt*nscl
             iarg = ipt*nargs
-            c(1:) = y(ic:ic+nscl)
-            dcdt(1:) = ydot(ic:ic+nscl)
+            c(:) = y(ic:ic+nscl)
+            dcdt(:) = ydot(ic:ic+nscl)
             temp = p(iarg) + 273.15
             salt = p(iarg+1)
 
@@ -77,6 +78,8 @@ contains
 
             dcdt(6) = b2 * c(2) - a2 * c(1) * c(6) - a4 * c(2) * c(6) + b4 * c(3) + a5 &
                     - b5 * H_qss * c(6) - a6 * c(4) * c(6) + b6 * c(5)
+
+            ydot(ic:ic+nscl) = dcdt
         end do
     end subroutine time_derivative
 

@@ -16,9 +16,10 @@ module miniapp_rkc
 
     interface
         pure subroutine time_derivative(t, y, ydot, p)
-            real, intent(in) :: t, y(:)
-            real, intent(inout) :: ydot(:)
-            real, intent(in), optional :: p(:)
+            real, intent(in) :: t
+            real, intent(in) :: y(0:)
+            real, intent(inout) :: ydot(0:)
+            real, intent(in), optional :: p(0:)
         end subroutine time_derivative
     end interface
 
@@ -56,7 +57,7 @@ contains
             !! The initial time.
         real, intent(in) :: t_f
             !! The desired final time.
-        real, intent(inout) :: y(:)
+        real, intent(inout) :: y(1:)
             !! Solution vector at `t_i` on input, at `t_f` on output
         real, intent(in), optional :: p(:)
             !! optional parameters to pass on to rhs subroutine
@@ -183,13 +184,13 @@ contains
             !! (Generally required as an argument to ODE function integrators)
         real, intent(in) :: hmax
             !! Maximum time step size
-        real, intent(in) :: y(:)
+        real, intent(in) :: y(1:)
             !! Current solution
-        real, intent(in) :: F(size(y))
+        real, intent(in) :: F(1:size(y))
             !! Time derivative of solution, dy/dt = F(y)
-        real, intent(inout) :: v(size(y))
+        real, intent(inout) :: v(1:size(y))
             !! Estimate of ODE system eigenvalues
-        real, intent(out) :: Fv(size(y))
+        real, intent(out) :: Fv(1:size(y))
             !! Time derivative of eigenalues, dv/dt = F(v)
         real, intent(in), optional :: p(:)
             !! optional parameters to pass on to rhs subroutine
@@ -244,7 +245,13 @@ contains
         end do
 
         ! if you get to the end of the loop without hitting the alternate return ...
-        print *, 'RKC WARNING: rkc_spec_rad failed to converge!'
+        print *, 'RKC ERROR: rkc_spec_rad failed to converge!'
+        print *, 't_rkc, 1/hmax, rho = ', t_rkc, 1/hmax, rkc_spec_rad
+        print *, 'lbdound = ', lbound(y), 'y = ', y
+        print *, 'lbdound = ', lbound(v), 'v = ', v
+        print *, 'lbdound = ', lbound(F), 'F = ', F
+        print *, 'lbdound = ', lbound(Fv), 'Fv = ', Fv
+        error stop 'ERROR STOP'
 
     end function rkc_spec_rad
 
@@ -257,7 +264,7 @@ contains
             !! The time step size
         integer, intent(in) :: s
             !! number of stages to compute
-        real, intent(in) :: y_0(:)
+        real, intent(in) :: y_0(1:)
             !! The current solution
         real, intent(in) :: F_0(size(y_0))
             !! The time derivative of current solution, dy/dt = F(y)
