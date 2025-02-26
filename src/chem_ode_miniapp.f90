@@ -60,14 +60,10 @@ program chem_ode_miniapp
 
     close (nml_unit)
 
-    ! Initialize the ODE solver, which associates the `solve_interval` pointer
-    print *, 'integrator = ', integrator
     call initialize_rkc(1e-6, 1e-10)
 
-    ! Open file for saving tracer history
-    open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
-
     ! Save initial conditions
+    open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
     call save_tracers(time_in_days=.true.)
 
     ! Time integration loop ----------------------------------------------------
