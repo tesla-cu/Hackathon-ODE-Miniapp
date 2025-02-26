@@ -22,6 +22,7 @@ contains
         associate (t => t); end associate
         npts = size(y) / nscl
 
+        !$acc kernels
         do ipt = 0, npts-1
             ic = ipt*nscl
             iarg = ipt*nargs
@@ -81,6 +82,7 @@ contains
 
             ydot(ic:ic+nscl) = dcdt
         end do
+        !$acc end kernels
     end subroutine time_derivative
 
 end module chemistry
