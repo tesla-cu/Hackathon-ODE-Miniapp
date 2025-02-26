@@ -20,7 +20,7 @@ contains
         real :: b1, b2, b3, b4, b5, b6, b7
 
         associate (t => t); end associate
-        npts = size(y) / npts
+        npts = size(y) / nscl
 
         !$acc parallel loop private(dcdt, c)
         do ipt = 0, npts-1
