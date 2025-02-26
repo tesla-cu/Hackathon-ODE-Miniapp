@@ -2,7 +2,7 @@
 &params
     start_time = 0.0,
         !! start time of simulation [s]
-    end_time = 1.0,
+    end_time = 2.0,
         !! end time of simulation [s]
     save_name = 'tracers.hst',
         !! file name for full solution outputs
@@ -10,7 +10,7 @@
         !! solution save rate [s]
     nx = 16, 16, 16
         !! 3D domain size
-    nflat = 2
+    nflat = 3
         !! number of dimensions to flatten into chem ode, choice: {1, 2, 3}
 /
 

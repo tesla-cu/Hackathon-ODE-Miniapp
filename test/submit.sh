@@ -4,17 +4,15 @@
 #PBS -l walltime=01:00:00
 #PBS -q develop
 #PBS -j oe
-#PBS -l select=1:ncpus=1:mem=4GB
+#PBS -l select=1:ncpus=1:mem=8GB
 
+module load ncarenv/23.09
+module reset
+module load linaro-forge
 module load mkl
-# module load cce/17
-# module load linaro-forge
-
-export TMPDIR=$SCRATCH/temp
-mkdir -p $TMPDIR
 
 ### Run the executable
 # cd /glade/work/ctowery/Hackathon-ODE-Miniapp/test
 export FORGE_SAMPLER_NUM_SAMPLES=10000
 export FORGE_SAMPLER_INTERVAL=2
-map --connect --no-mpi ./miniapp.exe
+map --connect --no-mpi --o ifort_opt2_flat1_1cpu.map ./miniapp.exe
