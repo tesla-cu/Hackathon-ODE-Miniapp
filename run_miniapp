@@ -2,13 +2,12 @@
 # Load in modules
 module reset
 module load mkl
-module load linaro-forge
+module load nvhpc
+module load openmpi
 ml
 
-make-profiler-libraries --platform=intel --lib-type=shared
 # Compile
-make profile
-
+mpif90 -acc -gpu=cc80 -Minfo=accel -c src/chem_ode_miniapp.f90 -o build/chem_ode_miniapp.o
 # Creating executable
 cd test/
 
@@ -18,11 +17,14 @@ cat > EXEC_STEP << EXEC
 #PBS -N hybrid_job
 #PBS -q tutorial 
 #PBS -l walltime=00:10:00
-#PBS -l select=1:ncpus=32:mpiprocs=32
+#PBS -l select=1:ncpus=32:mpiprocs=32:ngpus=1:mem=16GB
 #PBS -j oe
+#PBS -l gpu_type=a100
 
 module reset
 module load mkl
+module load nvhpc
+module load openmpi
 
 mpiexec ./miniapp.exe > output.out
 EXEC

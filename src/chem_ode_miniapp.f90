@@ -45,6 +45,9 @@ program chem_ode_miniapp
     call MPI_INIT(ierr)
     call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
     call MPI_COMM_SIZE(MPI_COMM_WORLD, nprocs, ierr)
+   
+    ! Assign each MPI process a GPU 
+    !$acc set device_num(rank) 
 
     dims = [0, 0]
     periods = [.true., .true.]
@@ -87,6 +90,7 @@ program chem_ode_miniapp
 
     close (nml_unit)
     ! Add some pt-to-pt variations, added 'l' to end of indices to be extra clear
+    !$acc parallel loop collapse(3) copyin(data)
     do kzl = 1, nx_loc(3)
         kzg = nx_loc(3) + kzl
 !        linear_z = 0.8 + 0.4 * real(kzg-1)/real(nx(3)-1)
@@ -106,6 +110,8 @@ program chem_ode_miniapp
             end do
         end do
     end do
+    !$acc end parallel loop
+
     ! Initialize the ODE solver, which associates the `solve_interval` pointer
     call initialize_integrator(integrator, rhs_wrapped, y_0, 1e-8, 1e-6, 1e-10)
 
@@ -119,6 +125,7 @@ program chem_ode_miniapp
     nt = 0
     do while (time < end_time)
         ! CHANGE FOR LOOP FOR MPI
+        !$acc parallel loop collapse(3) copyin(data)
         do kzl = 1, nx_loc(3)
             do jyl = 1, nx_loc(2)
                 do ixl = 1, nx_loc(1)
@@ -129,6 +136,7 @@ program chem_ode_miniapp
                 end do
             end do
         end do
+        !$acc end parallel loop
         nt = nt + 1
         time =  time + dt_save
         if (rank == 0) print *, 'saving output', nt

@@ -1,16 +1,3 @@
-#!/bin/sh
-# Load in modules
-module reset
-module load mkl
-
-# Compile
-make profile
-
-# Creating executable
-cd test/
-mv miniapp.exe miniapp_intel_opt2
-
-cat > submit_intel_opt2.sh << EXEC
 #!/bin/bash
 #PBS -N map_profile
 #PBS -A UCSG0002
@@ -27,7 +14,9 @@ module load mkl
 export FORGE_SAMPLER_NUM_SAMPLES=10000
 export FORGE_SAMPLER_INTERVAL=2
 
-for i in $(seq 1 3);
+for i in 1
+2
+3;
 do
 cat > user_inputs.nml << EOS
 !> Program time integration parameters
@@ -42,7 +31,7 @@ cat > user_inputs.nml << EOS
         !! solution save rate [s]
     nx = 16, 16, 16
         !! 3D domain size
-    nflat = ${i}
+    nflat = 
         !! number of dimensions to flatten into chem ode, choice: {1, 2, 3}
 /
 
@@ -66,9 +55,5 @@ cat > user_inputs.nml << EOS
         !! salinity [PSU]
 /
 EOS
-map --profile --no-mpi --o intel_opt2_flat${i}_1cpu.map ./miniapp_intel_opt2
+map --profile --no-mpi --o intel_opt2_flat_1cpu.map ./miniapp_intel_opt2
 done
-EXEC
-
-qsub submit_intel_opt2.sh
-
