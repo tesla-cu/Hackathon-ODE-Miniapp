@@ -10,7 +10,7 @@ contains
     pure subroutine time_derivative(t, y, ydot, p)
         real, intent(in) :: t
         real, intent(in) :: y(0:) ! explicitly setting lbound inside this routine
-        real, intent(inout) :: ydot(0:) ! same
+        real, intent(out) :: ydot(0:) ! same
         real, intent(in), optional :: p(0:) ! same
 
         real :: c(nscl), dcdt(nscl)

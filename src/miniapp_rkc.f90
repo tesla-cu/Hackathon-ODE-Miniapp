@@ -18,7 +18,7 @@ module miniapp_rkc
         pure subroutine time_derivative(t, y, ydot, p)
             real, intent(in) :: t
             real, intent(in) :: y(0:)
-            real, intent(inout) :: ydot(0:)
+            real, intent(out) :: ydot(0:)
             real, intent(in), optional :: p(0:)
         end subroutine time_derivative
     end interface
@@ -75,6 +75,7 @@ contains
         ny = size(y)
         t_rkc = t_i
         nstep = 0
+        ydot = 0.0
 
         ! Initialize integration limiters
         hmax = abs(t_f - t_i) ! maximum timestep size
@@ -84,6 +85,8 @@ contains
         rho = rkc_spec_rad(rhs, t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
         err_old = 0.0
         h_old = 0.0
+
+        print *, 'ydot initial = ', ydot
 
         ! --> Estimate the timestep size, h_n
         h_n = hmax
@@ -134,9 +137,11 @@ contains
             y = y_end
             ydot = vtemp1
             nstep = nstep + 1
+            print *, 't_rkc = ', t_rkc,
+            print *, 'ydot = ', ydot
 
             ! if at t_f, exit loop immediately
-            ! if (t_rkc >= t_f) exit
+            if (t_rkc >= t_f) exit
 
             ! compute adaptive time step, stage count, based on error
             adapt = 10.0
