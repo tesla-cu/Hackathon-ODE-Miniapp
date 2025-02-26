@@ -5,6 +5,13 @@ program chem_ode_miniapp
     use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
     implicit none ! ------------------------------------------------------------
+    ! variables for gpu
+    
+    ! subroutines for gpu
+    !$acc routine save_tracers seq
+    !$acc routine time_derivative seq
+    !$acc routine initialize_rkc seq 
+    !$acc routine rkc_integrate seq
 
     character(len=*), parameter :: input_file = "user_inputs.nml"
 
@@ -25,8 +32,6 @@ program chem_ode_miniapp
     integer :: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d
     integer :: dims(2), coords(2)
     logical :: periods(2)
-       !! time testing 
-    real :: start, finish
     real, allocatable :: tracers(:, :, :, :)
         !! 3D reacting scalars state vector and 0D initial condition
     real, allocatable :: args(:, :, :, :)
@@ -37,7 +42,6 @@ program chem_ode_miniapp
     namelist /params/ start_time, end_time, save_name, dt_save, &
         nx, temperature, salinity, y_0
     
-    call cpu_time(start)
     call MPI_INIT(ierr)
     call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
     call MPI_COMM_SIZE(MPI_COMM_WORLD, nprocs, ierr)
@@ -89,8 +93,8 @@ program chem_ode_miniapp
                 ! across the entirety of the x-dimension
                 !ixg = nx_loc(1)*px_rank + ixl ! px_rank goes from 0 to px-1
                 !linear_x = 0.8 + 0.4 * real(ixg-1)/real(nx(1)-1) ! ixg/nx(1) goes from 0.0 to 1.0
-                tracers(ixl, jyl, :, kzl) = y_0(:) !* exp_z 
-                args(ixl, jyl, :, kzl) = p_0
+                tracers(ixl, jyl, :, kzl) = y_0(:)
+                args(ixl, jyl, :, kzl) = p_0(:)
             end do
         end do
     end do
@@ -132,13 +136,9 @@ program chem_ode_miniapp
     deallocate (tracers, args)
 
     call MPI_FINALIZE(ierr)
-    call cpu_time(finish)
-    !$acc kernels
-    print '("Time = ",f6.3," seconds.")',finish-start
-    !$acc end kernels
 contains ! ---------------------------------------------------------------------
-
     subroutine save_tracers(time_in_days)
+        !$acc rountine
         !! DOCSTRING
         implicit none
         logical, intent(in), optional :: time_in_days

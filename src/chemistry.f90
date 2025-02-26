@@ -6,8 +6,8 @@ module chemistry
     real, parameter :: SEC_PER_DAY = 86400.0
 
 contains
-
     subroutine time_derivative(t, y, ydot, p)
+        !$acc rountine seq
         real, intent(in) :: t
         real, intent(in) :: y(nscl), p(nargs)
         real, intent(inout) :: ydot(nscl)

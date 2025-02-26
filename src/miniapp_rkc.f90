@@ -25,6 +25,7 @@ module miniapp_rkc
 contains
 
     subroutine initialize_rkc(rtol, atol)
+        !$acc routine seq
         !! Initialize the RKC integrator's working memory and RHS function pointer.
         real, intent(in), optional :: rtol
             !! relative tolerance value
@@ -39,6 +40,7 @@ contains
     end subroutine initialize_rkc
 
     subroutine rkc_inplace_step(rhs, t, dt, y, p)
+        !$acc routine seq
         procedure(time_derivative) :: rhs
         real, intent(in) :: t, dt
         real, intent(inout) :: y(:)
@@ -48,8 +50,8 @@ contains
         y(:) = rkc_step(rhs, t, dt, s_max, y, ydot, p)
     end subroutine rkc_inplace_step
 
-    !#acc routine serial
     subroutine rkc_integrate(rhs, t_i, t_f, y, p)
+        !$acc routine seq
         !! Integrate forward in time using adaptive Runge-Kutta-Chebyshev as an
         !! inner timestepper for stiff chemistry
         procedure(time_derivative) :: rhs
@@ -109,6 +111,7 @@ contains
         end if
 
         ! INTEGRATE TO END TIME
+        !$acc loop seq
         do
             ! perform tentative time step
             y_end = rkc_step(rhs, t_rkc, h_n, s, y, ydot, p)
@@ -118,6 +121,7 @@ contains
 
             ! estimate error
             err = 0.0
+            !$acc loop 
             do i = 1, ny
                 est = 0.8 * (y(i) - y_end(i)) + 0.4 * h_n * (ydot(i) + vtemp1(i))
                 est = est / (abs_tol + rel_tol * max(abs(y_end(i)), abs(y(i))))
@@ -179,6 +183,7 @@ contains
     end subroutine rkc_integrate
 
     function rkc_spec_rad(rhs, t_rkc, hmax, y, F, v, Fv, p)
+        !$acc routine seq
         !! Function to estimate upper bound of the spectral radius of stability
         procedure(time_derivative) :: rhs
         real, intent(in) :: t_rkc
@@ -224,6 +229,7 @@ contains
 
         ! now iterate using nonlinear power method
         sigma1 = 0.0
+        !$acc loop seq
         do iter = 1, itmax
             call rhs(t_rkc, v, Fv, p)
             dF_rms = sqrt(sum((Fv - F)**2))
@@ -243,16 +249,17 @@ contains
                 ! this part is from original RKC code, but doesn't make sense to Colin.
                 ! Based on RKC paper, what is wanted is v(ind) = -v(ind). If we
                 ! had infinite precision, then this would set v(ind) = 2*y(ind) - v(ind).
-                print *, 'RKC TESTING: reached dF_rms == 0 branch inside rkc_spec_rad'
+                ! print *, 'RKC TESTING: reached dF_rms == 0 branch inside rkc_spec_rad'
             end if
         end do
 
         ! if you get to the end of the loop without hitting the alternate return ...
-        print *, 'RKC WARNING: rkc_spec_rad failed to converge!'
+        ! print *, 'RKC WARNING: rkc_spec_rad failed to converge!'
 
     end function rkc_spec_rad
 
     function rkc_step(rhs, t_rkc, h, s, y_0, F_0, p) result(y_j)
+        !$acc routine seq
         !! Function to take a single RKC integration step of variable stage count.
         procedure(time_derivative) :: rhs
         real, intent(in) :: t_rkc
@@ -305,7 +312,7 @@ contains
         dzjm2 = 0.0
         d2zjm1 = 0.0
         d2zjm2 = 0.0
-
+        !$acc loop seq
         do j = 2, s
             zj = 2.0 * w0 * zjm1 - zjm2
             dzj = 2.0 * w0 * dzjm1 - dzjm2 + 2.0 * zjm1
