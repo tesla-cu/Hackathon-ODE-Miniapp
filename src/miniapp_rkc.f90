@@ -83,7 +83,7 @@ contains
         hmin = 10.0 * UROUND * max(abs(t_i), hmax) ! minimum timestep size
         call rhs(t_rkc, y, ydot, p) ! calculate RHS for initial y input
         eigenv = ydot ! initial estimate of eigenvector
-        rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+        rho = rkc_spec_rad(rhs, t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
         err_old = 0.0
         h_old = 0.0
 
@@ -128,7 +128,7 @@ contains
             ! If error too large, reject step and do not update t_rkc, etc.
             if (err >= 1.0) then
                 h_n = 0.8 * h_n / (err**(1.0 / 3.0))
-                rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+                rho = rkc_spec_rad(rhs, t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
                 cycle
             end if
 
@@ -172,7 +172,7 @@ contains
 
             ! re-estimate Jacobian spectral radius every 25 steps
             if (mod(nstep, 25) == 0) then
-                rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+                rho = rkc_spec_rad(rhs, t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
             end if
 
         end do ! while loop
