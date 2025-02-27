@@ -267,6 +267,10 @@ contains
 
         ! internal work memory
         real, dimension(size(y_0)) :: y_jm1, y_jm2
+        real, dimension(size(y_0)) :: y_test1, y_test2
+        y_test1 = y_0
+        y_test2 = F_0
+
 
         ! variable RK stage coefficients, and related variables
         real :: w0, temp1, temp2, arg, w1, b_jm1, b_jm2, mu_t
@@ -313,7 +317,7 @@ contains
 
             ! calculate derivative
             !call time_derivative(t_rkc, y_jm1, y_j, p)
-            call time_derivative(t_rkc, y_0, F_0, p)
+            call time_derivative(t_rkc, y_test1, y_test2, p)
 
             y_j(:) = (1.0 - mu - nu) * y_0 + (mu * y_jm1) + (nu * y_jm2) &
                      + h * mu_t * (y_j - (gamma_t * F_0))
