@@ -89,22 +89,21 @@ program chem_ode_miniapp
     ! to be inefficient and should be changed as part of testing.
     ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
     print *, 'y_0, tracers: ', y_0
+    print *, 'nx_loc: ', nx_loc
 
     allocate (tracers(nscl, nx_loc(1), nx_loc(2), nx_loc(3)))
     allocate (args(nargs, nx_loc(1), nx_loc(2), nx_loc(3)))
 
     !TODO: Add perturbations to the ICs, like sinusoids or random noise, so that
     !      each spatial point solves a slightly different trajectory in state space
-    !do kz = 1, nx_loc(3)
-    !    do jy = 1, nx_loc(2)
-    !        do ix = 1, nx_loc(1)
-    !            tracers(:, ix, jy, kz) = y_0
-    !            args(:, ix, jy, kz) = p_0
-    !        end do
-    !    end do
-    !end do
-    tracers(:, :, :, :) = y_0 * ones([nscl, nx_loc(1), nx_loc(2), nx_loc(3)])
-    args(:, :, :, :) = p_0 * ones([nargs, nx_loc(1), nx_loc(2), nx_loc(3)])
+    do kz = 1, nx_loc(3)
+        do jy = 1, nx_loc(2)
+            do ix = 1, nx_loc(1)
+                tracers(:, ix, jy, kz) = y_0
+                args(:, ix, jy, kz) = p_0
+            end do
+        end do
+    end do
     print *, 'tracers after defined in matrix: ', tracers(:, 1, 1, 1)
 
     close (nml_unit)
