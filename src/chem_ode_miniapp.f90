@@ -88,8 +88,8 @@ program chem_ode_miniapp
     ! z-direction is how NCAR-LES does it currently. This is sure
     ! to be inefficient and should be changed as part of testing.
     ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
-    print *, 'tracers: ', y_0
-    
+    if (rank == 0) print *, 'tracers: ', y_0
+
     allocate (tracers(nscl, nx_loc(1), nx_loc(2), nx_loc(3)))
     allocate (args(nargs, nx_loc(1), nx_loc(2), nx_loc(3)))
 
@@ -104,6 +104,8 @@ program chem_ode_miniapp
         end do
     end do
 
+    if (rank == 0) print *, 'tracers after defined in matrix: ', tracers(:, 1, 1, 1)
+
     close (nml_unit)
 
     call initialize_rkc(1e-6, 1e-10)
@@ -114,6 +116,8 @@ program chem_ode_miniapp
     ! Compute the averages and save
     call save_tracers(time_in_days=.true.)
 
+    if (rank == 0) print *, 'tracers after initial condition print: ', tracers(:, 1, 1, 1)
+
 !$acc enter data copyin(tracers,args)
     ! Time integration loop ----------------------------------------------------
     nt = 0
@@ -122,6 +126,7 @@ program chem_ode_miniapp
         select case(nflat)
         case(0)
             write(*,*) "Inside Case 0"
+            if (rank == 0) print *, 'tracers after in while loop before dcdt: ', tracers(:, 1, 1, 1)
 !$acc parallel
 !$acc loop gang vector collapse(3) private(y,p)
             do kz = 1, nx_loc(3)
@@ -141,6 +146,7 @@ program chem_ode_miniapp
                 end do
             end do
 !$acc end parallel
+            if (rank == 0) print *, 'tracers after in while loop after dcdt: ', tracers(:, 1, 1, 1)
 
         case(1)
             write(*,*) "Inside Case 1"
