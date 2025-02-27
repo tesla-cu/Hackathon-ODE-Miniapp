@@ -1,6 +1,7 @@
 program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     !!
+    use mpi
     use iso_fortran_env, only: DP => real64, LI => int64
     use chemistry, only: time_derivative, nscl, nargs
     use miniapp_rkc, only: initialize_rkc, rkc_integrate
@@ -27,7 +28,7 @@ program chem_ode_miniapp
     integer :: ix, jy, kz, k
     real :: linear_x, linear_y, linear_z, exp_z
        !! MPI variables
-    integer :: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d, MPI_COMM_WORLD
+    integer :: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d !, MPI_COMM_WORLD
     integer :: dims(2), coords(2)
     logical :: periods(2)
     real, allocatable :: tracers(:, :, :, :)
