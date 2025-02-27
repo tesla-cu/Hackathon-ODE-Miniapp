@@ -88,6 +88,8 @@ program chem_ode_miniapp
     ! z-direction is how NCAR-LES does it currently. This is sure
     ! to be inefficient and should be changed as part of testing.
     ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
+    print *, 'tracers: ', y_0
+    
     allocate (tracers(nscl, nx_loc(1), nx_loc(2), nx_loc(3)))
     allocate (args(nargs, nx_loc(1), nx_loc(2), nx_loc(3)))
 
@@ -224,7 +226,7 @@ contains ! ---------------------------------------------------------------------
         fmt = '(A10,'//trim(str_nscl)//'ES15.5)'
 
         if (rank == 0) then
-            write (save_unit, fmt) 'averages: ', io_time, io_tracer2 / product(nx_loc) ! convert sum to average
+            write (save_unit, fmt) 'averages: ', io_time, io_tracer1 / product(nx_loc) ! convert sum to average
             write (save_unit, fmt) 'first pt: ', io_time, tracers(:, 1, 1, 1)
         end if
     end subroutine save_tracers
