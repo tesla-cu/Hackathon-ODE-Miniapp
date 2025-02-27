@@ -18,7 +18,7 @@ program chem_ode_miniapp
         !! output filenames
     real :: dt_save = 1e99
         !! data output intervals, [s]
-    real :: start_time = 0.0, end_time = 1e-5, time = 0.0
+    real :: start_time = 0.0, end_time = 1e-5, time_track = 0.0
         !! time integration variables, [s]
     real :: temperature = 25.0, salinity = 35.0
         !! temperature [deg C], and salinity [units]
@@ -43,7 +43,7 @@ program chem_ode_miniapp
     character(len=10) :: clock_time
 
     ! variables for gpu
-    !$acc declare create(time, dt_save, start_time, end_time, nx, nx_loc, tracers, args, y_0, p_0, y, p)
+    !$acc declare create(time_track, dt_save, start_time, end_time, nx, nx_loc, tracers, args, y_0, p_0, y, p)
 
     namelist /params/ start_time, end_time, save_name, dt_save, &
         nx, nflat, temperature, salinity, y_0
@@ -122,7 +122,7 @@ program chem_ode_miniapp
 !$acc enter data copyin(tracers,args)
     ! Time integration loop ----------------------------------------------------
     nt = 0
-    do while (time < end_time)
+    do while (time_track < end_time)
 
         select case(nflat)
         case(0)
@@ -138,7 +138,7 @@ program chem_ode_miniapp
                       do k=1,nargs
                         p(k) = args(k, ix, jy, kz) ! these are not contiguous arrays, must be copied!
                       enddo
-                        call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
+                        call rkc_integrate(time_track, time_track + dt_save, y, p, npts, nscl, nargs)
                       do k=1,nscl
                         tracers(k, ix, jy, kz) = y(k)
                       enddo
@@ -153,7 +153,7 @@ program chem_ode_miniapp
                 do jy = 1, nx_loc(2)
                     y(:) = reshape(tracers(:, :, jy, kz), [npts*nscl])
                     p(:) = reshape(args(:, :, jy, kz), [npts*nargs])
-                    call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
+                    call rkc_integrate(time_track, time_track + dt_save, y, p, npts, nscl, nargs)
                     tracers(:, :, jy, kz) = reshape(y, [nscl, nx_loc(1)])
                 end do
             end do
@@ -163,7 +163,7 @@ program chem_ode_miniapp
             do kz = 1, nx_loc(3)
                 y(:) = reshape(tracers(:, :, :, kz), [npts*nscl])
                 p(:) = reshape(args(:, :, :, kz), [npts*nargs])
-                call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
+                call rkc_integrate(time_track, time_track + dt_save, y, p, npts, nscl, nargs)
                 tracers(:, :, :, kz) = reshape(y, [nscl, nx_loc(1), nx_loc(2)])
             end do
 
@@ -171,12 +171,12 @@ program chem_ode_miniapp
             write(*,*) "Inside Case 3"
             y(:) = reshape(tracers, [npts*nscl])
             p(:) = reshape(args, [npts*nargs])
-            call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
+            call rkc_integrate(time_track, time_track + dt_save, y, p, npts, nscl, nargs)
             tracers(:, :, :, :) = reshape(y, [nscl, nx_loc(1), nx_loc(2), nx_loc(3)])
 
         end select
 
-        time = time + dt_save
+        time_track = time_track + dt_save
 
 !$acc update host(tracers)
         print *, 'saving output', nt
@@ -219,7 +219,7 @@ contains ! ---------------------------------------------------------------------
         character(len=:), allocatable :: fmt ! text I/O format string
         integer :: i ! loop index
 
-        io_time = time ! io_time currently in seconds
+        io_time = time_track ! io_time currently in seconds
         if (present(time_in_days) .and. time_in_days) io_time = io_time / SEC_PER_DAY
 
         do i = 1, nscl
