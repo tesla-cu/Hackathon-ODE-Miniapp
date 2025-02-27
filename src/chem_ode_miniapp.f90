@@ -38,9 +38,6 @@ program chem_ode_miniapp
     real(DP)    :: rate
     character(len=10) :: clock_time
 
-    ! variables for gpu
-    !$acc declare create(time_track, dt_save, start_time, end_time, nx, nx_loc, tracers, args, y_0, p_0, y, p)
-
     namelist /params/ start_time, end_time, save_name, dt_save, &
         nx, nflat, temperature, salinity, y_0
     
