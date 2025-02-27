@@ -8,12 +8,8 @@ program chem_ode_miniapp
 
     implicit none ! ------------------------------------------------------------
     ! subroutines for gpu
-    !$acc routine (save_tracers) 
-    !$acc routine (initialize_rkc)  
-    !$acc routine (rkc_integrate) 
 
     character(len=*), parameter :: input_file = "./test/user_inputs.nml"
-
     character(len=128) :: save_name
         !! output filenames
     real :: dt_save = 1e99
