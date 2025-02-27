@@ -17,9 +17,9 @@ module miniapp_rkc
     interface
         pure subroutine time_derivative(t, y, ydot, p)
             real, intent(in) :: t
-            real, intent(in) :: y(0:)
-            real, intent(out) :: ydot(0:)
-            real, intent(in), optional :: p(0:)
+            real, intent(in) :: y(:)
+            real, intent(out) :: ydot(:)
+            real, intent(in), optional :: p(:)
         end subroutine time_derivative
     end interface
 
@@ -82,11 +82,10 @@ contains
         hmin = 10.0 * UROUND * max(abs(t_i), hmax) ! minimum timestep size
         call rhs(t_rkc, y, ydot, p) ! calculate RHS for initial y input
         eigenv = ydot ! initial estimate of eigenvector
+
         rho = rkc_spec_rad(rhs, t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
         err_old = 0.0
         h_old = 0.0
-
-        print *, 'ydot initial = ', ydot
 
         ! --> Estimate the timestep size, h_n
         h_n = hmax
@@ -109,7 +108,7 @@ contains
         end if
 
         ! INTEGRATE TO END TIME
-        do while (t_rkc < t_f)
+        do ! while (t_rkc < t_f)
             ! perform tentative time step
             y_end = rkc_step(rhs, t_rkc, h_n, s, y, ydot, p)
 
@@ -137,8 +136,6 @@ contains
             y = y_end
             ydot = vtemp1
             nstep = nstep + 1
-            print *, 't_rkc = ', t_rkc
-            print *, 'ydot = ', ydot
 
             ! if at t_f, exit loop immediately
             if (t_rkc >= t_f) exit

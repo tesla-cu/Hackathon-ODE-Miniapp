@@ -13,7 +13,8 @@ contains
         real, intent(out) :: ydot(0:) ! same
         real, intent(in), optional :: p(0:) ! same
 
-        real :: c(nscl), dcdt(nscl)
+        real, dimension(nscl) :: c, dcdt
+
         integer :: npts, ipt, ic, iarg
         real :: K1s, K2s, Kw, Kb, Rgas, salt, temp, H_qss
         real :: a1, a2, a3, a4, a5, a6, a7
@@ -27,7 +28,6 @@ contains
             ic = ipt*nscl
             iarg = ipt*nargs
             c(:) = y(ic:ic+nscl-1)
-            dcdt(:) = ydot(ic:ic+nscl-1)
             temp = p(iarg) + 273.15
             salt = p(iarg+1)
 
