@@ -27,7 +27,7 @@ program chem_ode_miniapp
     integer :: ix, jy, kz, k
     real :: linear_x, linear_y, linear_z, exp_z
        !! MPI variables
-    integer :: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d
+    integer :: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d, MPI_COMM_WORLD
     integer :: dims(2), coords(2)
     logical :: periods(2)
     real, allocatable :: tracers(:, :, :, :)
