@@ -24,7 +24,7 @@ program chem_ode_miniapp
     integer :: nx(3), nx_loc(3)
         !! 3D size of domain
     integer :: nt, save_unit, nml_unit, nflat, npts
-    integer :: ixl, ixg, jyl, kzl, ip, jyg, kz, kg
+    integer :: ix, jy, kz, k
     real :: linear_x, linear_y, linear_z, exp_z
        !! MPI variables
     integer :: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d
@@ -66,6 +66,10 @@ program chem_ode_miniapp
     px_rank = coords(1)
     py_rank = coords(2)
 
+    nx_loc(1) = nx(1) / px
+    nx_loc(2) = nx(2) / py
+    nx_loc(3) = nx(3)
+
     call date_and_time(time=clock_time)
     call system_clock(count_rate=cr)
     rate = real(cr, DP)
@@ -90,16 +94,16 @@ program chem_ode_miniapp
     ! z-direction is how NCAR-LES does it currently. This is sure
     ! to be inefficient and should be changed as part of testing.
     ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
-    allocate (tracers(nscl, nx(1), nx(2), nx(3)))
-    allocate (args(nargs, nx(1), nx(2), nx(3)))
+    allocate (tracers(nscl, nx_loc(1), nx_loc(2), nx_loc(3)))
+    allocate (args(nargs, nx_loc(1), nx_loc(2), nx_loc(3)))
 
     !TODO: Add perturbations to the ICs, like sinusoids or random noise, so that
     !      each spatial point solves a slightly different trajectory in state space
-    do kz = 1, nx(3)
-        do jy = 1, nx(2)
-            do ix = 1, nx(1)
-                tracers(ix, jy, :, kz) = y_0
-                args(ix, jy, :, kz) = p_0
+    do kz = 1, nx_loc(3)
+        do jy = 1, nx_loc(2)
+            do ix = 1, nx_loc(1)
+                tracers(:, ix, jy, kz) = y_0
+                args(:, ix, jy, kz) = p_0
             end do
         end do
     end do
@@ -124,9 +128,9 @@ program chem_ode_miniapp
             write(*,*) "Inside Case 0"
 !$acc parallel
 !$acc loop gang vector collapse(3) private(y,p)
-            do kz = 1, nx(3)
-                do jy = 1, nx(2)
-                    do ix = 1, nx(1)
+            do kz = 1, nx_loc(3)
+                do jy = 1, nx_loc(2)
+                    do ix = 1, nx_loc(1)
                       do k=1,nscl
                         y(k) = tracers(k, ix, jy, kz) ! these are not contiguous arrays, must be copied!
                       enddo
@@ -144,22 +148,22 @@ program chem_ode_miniapp
 
         case(1)
             write(*,*) "Inside Case 1"
-            do kz = 1, nx(3)
-                do jy = 1, nx(2)
+            do kz = 1, nx_loc(3)
+                do jy = 1, nx_loc(2)
                     y(:) = reshape(tracers(:, :, jy, kz), [npts*nscl])
                     p(:) = reshape(args(:, :, jy, kz), [npts*nargs])
                     call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
-                    tracers(:, :, jy, kz) = reshape(y, [nscl, nx(1)])
+                    tracers(:, :, jy, kz) = reshape(y, [nscl, nx_loc(1)])
                 end do
             end do
 
         case(2)
             write(*,*) "Inside Case 2"
-            do kz = 1, nx(3)
+            do kz = 1, nx_loc(3)
                 y(:) = reshape(tracers(:, :, :, kz), [npts*nscl])
                 p(:) = reshape(args(:, :, :, kz), [npts*nargs])
                 call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
-                tracers(:, :, :, kz) = reshape(y, [nscl, nx(1), nx(2)])
+                tracers(:, :, :, kz) = reshape(y, [nscl, nx_loc(1), nx_loc(2)])
             end do
 
         case(3)
@@ -167,7 +171,7 @@ program chem_ode_miniapp
             y(:) = reshape(tracers, [npts*nscl])
             p(:) = reshape(args, [npts*nargs])
             call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
-            tracers(:, :, :, :) = reshape(y, [nscl, nx(1), nx(2), nx(3)])
+            tracers(:, :, :, :) = reshape(y, [nscl, nx_loc(1), nx_loc(2), nx_loc(3)])
 
         end select
 
@@ -227,7 +231,7 @@ contains ! ---------------------------------------------------------------------
         fmt = '(A10,'//trim(str_nscl)//'ES15.5)'
 
         if (rank == 0) then
-            write (save_unit, fmt) 'averages: ', io_time, io_tracer2 / product(nx) ! convert sum to average
+            write (save_unit, fmt) 'averages: ', io_time, io_tracer2 / product(nx_loc) ! convert sum to average
             write (save_unit, fmt) 'first pt: ', io_time, tracers(:, 1, 1, 1)
         end if
     end subroutine save_tracers
