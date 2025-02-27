@@ -6,58 +6,60 @@ module miniapp_rkc
     !! version of RKC compared to what was added to NCAR-LES by Kat Smith and
     !! Kyle Niemeyer. For a version of RKC faithful to the NCAR-LES implementation,
     !! see the `ncarles_rkc` module.
-    !use chemistry, only: time_derivative
+    use chemistry, only: time_derivative, nscl, nargs
     implicit none
-    !$acc routine (time_derivative) 
-    public :: initialize_rkc, rkc_integrate, rkc_inplace_step
+    private
+    public :: initialize_rkc, rkc_integrate
+!!!, rkc_inplace_step
 
     real, parameter :: UROUND = epsilon(1.0)
     real :: rel_tol, abs_tol
     integer :: s_max
-    !$acc declare create(rel_tol, abs_tol, s_max)
+!$acc declare create(rel_tol,abs_tol,s_max)
 
 contains
 
     subroutine initialize_rkc(rtol, atol)
-        !$acc routine seq
         !! Initialize the RKC integrator's working memory and RHS function pointer.
         real, intent(in), optional :: rtol
             !! relative tolerance value
         real, intent(in), optional :: atol
             !! absolute tolerance value
-        
 
         rel_tol = 1.0e-6; if (present(rtol)) rel_tol = rtol
         abs_tol = 1.0e-10; if (present(atol)) abs_tol = atol
         ! maximum number of RKC stages based on rel_tol
         s_max = max(2, nint(sqrt(0.1 * rel_tol / UROUND)))
+!$acc update device(rel_tol,abs_tol,s_max)
 
     end subroutine initialize_rkc
 
-    subroutine rkc_inplace_step(t, dt, y, p)
-        !$acc routine seq
-        real, intent(in) :: t, dt
-        real, intent(inout) :: y(:)
-        real, intent(in) :: p(:)
-        real :: ydot(size(y))  ! initial derivative at time `t`
-        call time_derivative(t, y, ydot, p)
-        y(:) = rkc_step(t, dt, s_max, y, ydot, p)
-    end subroutine rkc_inplace_step
+!!!    subroutine rkc_inplace_step(rhs, t, dt, y, p)
+!!!        procedure(time_derivative) :: rhs
+!!!        real, intent(in) :: t, dt
+!!!        real, intent(inout) :: y(:)
+!!!        real, intent(in), optional :: p(:)
+!!!        real :: ydot(size(y))  ! initial derivative at time `t`
+!!!        call rhs(t, y, ydot, p)
+!!!        y(:) = rkc_step(rhs, t, dt, s_max, y, ydot, p)
+!!!    end subroutine rkc_inplace_step
 
-    subroutine rkc_integrate(t_i, t_f, y, p)
-        !$acc routine seq
+    subroutine rkc_integrate(t_i, t_f, y, p, npts, nscl, nargs)
+!$acc routine 
         !! Integrate forward in time using adaptive Runge-Kutta-Chebyshev as an
         !! inner timestepper for stiff chemistry
+        integer, intent(in) :: npts, nscl, nargs
         real, intent(in) :: t_i
             !! The initial time.
         real, intent(in) :: t_f
             !! The desired final time.
-        real, intent(inout) :: y(:)
+        real, dimension(npts*nscl), intent(inout) :: y
             !! Solution vector at `t_i` on input, at `t_f` on output
-        real, intent(in) :: p(:)
-            !! parameters to pass on to time_derivative subroutine
+        real, dimension(npts*nargs), intent(in), optional :: p
+            !! optional parameters to pass on to rhs subroutine
+
         ! work arrays
-        real, dimension(size(y)) :: y_end, ydot, vtemp1, vtemp2, eigenv
+        real, dimension(npts*nscl) :: y_end, ydot, vtemp1, vtemp2, eigenv
         ! internal work arrays: not all may be necessary, haven't figured out minimum
         ! needed working memory. `eigenv` used to be stored in work(4:)
 
@@ -66,20 +68,22 @@ contains
         integer :: ny, nstep, s, i
         real :: t_rkc, hmax, hmin, err, est, adapt, temp1, temp2
 
-        ! Initialize progress variables
         ny = size(y)
-
         t_rkc = t_i
         nstep = 0
+        ydot = 0.0
 
         ! Initialize integration limiters
         hmax = abs(t_f - t_i) ! maximum timestep size
         hmin = 10.0 * UROUND * max(abs(t_i), hmax) ! minimum timestep size
         call time_derivative(t_rkc, y, ydot, p) ! calculate RHS for initial y input
         eigenv = ydot ! initial estimate of eigenvector
-        rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+
+        rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p, npts, nscl, nargs)
         err_old = 0.0
         h_old = 0.0
+
+!!!        print *, 'ydot initial = ', ydot
 
         ! --> Estimate the timestep size, h_n
         h_n = hmax
@@ -102,16 +106,15 @@ contains
         end if
 
         ! INTEGRATE TO END TIME
-        do !while (t_rkc >= t_f)
+        do ! while (t_rkc < t_f)
             ! perform tentative time step
-            y_end = rkc_step(t_rkc, h_n, s, y, ydot, p)
+            y_end = rkc_step(t_rkc, h_n, s, y, ydot, p, npts, nscl, nargs)
 
             ! calculate F_np1 with tenative y_np1
             call time_derivative(t_rkc, y_end, vtemp1, p)
 
             ! estimate error
             err = 0.0
-            !$acc loop 
             do i = 1, ny
                 est = 0.8 * (y(i) - y_end(i)) + 0.4 * h_n * (ydot(i) + vtemp1(i))
                 est = est / (abs_tol + rel_tol * max(abs(y_end(i)), abs(y(i))))
@@ -122,7 +125,7 @@ contains
             ! If error too large, reject step and do not update t_rkc, etc.
             if (err >= 1.0) then
                 h_n = 0.8 * h_n / (err**(1.0 / 3.0))
-                rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+                rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p, npts, nscl, nargs)
                 cycle
             end if
 
@@ -131,6 +134,8 @@ contains
             y = y_end
             ydot = vtemp1
             nstep = nstep + 1
+!!!            print *, 't_rkc = ', t_rkc
+!!!            print *, 'ydot = ', ydot
 
             ! if at t_f, exit loop immediately
             if (t_rkc >= t_f) exit
@@ -165,33 +170,33 @@ contains
 
             ! re-estimate Jacobian spectral radius every 25 steps
             if (mod(nstep, 25) == 0) then
-                rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+                rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p, npts, nscl, nargs)
             end if
 
         end do ! while loop
 
     end subroutine rkc_integrate
 
-    function rkc_spec_rad(t_rkc, hmax, y, F, v, Fv, p)
-        !$acc routine seq
+    function rkc_spec_rad(t_rkc, hmax, y, F, v, Fv, p, npts, nscl, nargs)
+!$acc routine
         !! Function to estimate upper bound of the spectral radius of stability
-        
+        integer, intent(in) :: npts, nscl, nargs
         real, intent(in) :: t_rkc
             !! The current time.
             !! NOTE: unused dummy argument! Kept for backwards compatibility.
             !! (Generally required as an argument to ODE function integrators)
         real, intent(in) :: hmax
             !! Maximum time step size
-        real, intent(in) :: y(:)
+        real, dimension(npts*nscl), intent(in) :: y
             !! Current solution
-        real, intent(in) :: F(:)
+        real, dimension(npts*nscl), intent(in) :: F
             !! Time derivative of solution, dy/dt = F(y)
-        real, intent(inout) :: v(:)
+        real, dimension(npts*nscl), intent(inout) :: v
             !! Estimate of ODE system eigenvalues
-        real, intent(out) :: Fv(:)
+        real, dimension(npts*nscl), intent(out) :: Fv
             !! Time derivative of eigenalues, dv/dt = F(v)
-        real, intent(in)  :: p(:)
-            !! parameters to pass on to time_derivative subroutine
+        real, dimension(npts*nargs), intent(in), optional :: p
+            !! optional parameters to pass on to rhs subroutine
         real :: rkc_spec_rad
             !! function result
 
@@ -238,39 +243,42 @@ contains
                 ! this part is from original RKC code, but doesn't make sense to Colin.
                 ! Based on RKC paper, what is wanted is v(ind) = -v(ind). If we
                 ! had infinite precision, then this would set v(ind) = 2*y(ind) - v(ind).
-                ! print *, 'RKC TESTING: reached dF_rms == 0 branch inside rkc_spec_rad'
+!!!                print *, 'RKC TESTING: reached dF_rms == 0 branch inside rkc_spec_rad'
             end if
         end do
 
         ! if you get to the end of the loop without hitting the alternate return ...
-        ! print *, 'RKC WARNING: rkc_spec_rad failed to converge!'
+!!!        print *, 'RKC ERROR: rkc_spec_rad failed to converge!'
+!!!        print *, 't_rkc, 1/hmax, rho = ', t_rkc, 1/hmax, rkc_spec_rad
+!!!        print *, 'lbdound = ', lbound(y), 'y = ', y
+!!!        print *, 'lbdound = ', lbound(v), 'v = ', v
+!!!        print *, 'lbdound = ', lbound(F), 'F = ', F
+!!!        print *, 'lbdound = ', lbound(Fv), 'Fv = ', Fv
+!!!        error stop 'ERROR STOP'
 
     end function rkc_spec_rad
 
-    function rkc_step(t_rkc, h, s, y_0, F_0, p) result(y_j)
-        !$acc routine seq
+    function rkc_step(t_rkc, h, s, y_0, F_0, p, npts, nscl, nargs) result(y_j)
+!$acc routine
         !! Function to take a single RKC integration step of variable stage count.
+        integer, intent(in) :: npts, nscl, nargs
         real, intent(in) :: t_rkc
             !! The current time. Here for generic integrator compatibility.
         real, intent(in) :: h
             !! The time step size
         integer, intent(in) :: s
             !! number of stages to compute
-        real, intent(in) :: y_0(:)
+        real, dimension(npts*nscl), intent(in) :: y_0
             !! The current solution
-        real, intent(in) :: F_0(size(y_0))
+        real, dimension(npts*nscl), intent(in) :: F_0
             !! The time derivative of current solution, dy/dt = F(y)
-        real, intent(in), optional :: p(:)
-            !! parameters to pass on to time_derivative subroutine
-        real :: y_j(size(y_0))
+        real, dimension(npts*nargs), intent(in), optional :: p
+            !! optional parameters to pass on to rhs subroutine
+        real :: y_j(npts*nscl)
             !! The solution at the end of the step
 
         ! internal work memory
-        real, dimension(size(y_0)) :: y_jm1, y_jm2
-        real, dimension(size(y_0)) :: y_test1, y_test2
-        y_test1 = y_0
-        y_test2 = F_0
-
+        real, dimension(npts*nscl) :: y_jm1, y_jm2
 
         ! variable RK stage coefficients, and related variables
         real :: w0, temp1, temp2, arg, w1, b_jm1, b_jm2, mu_t
@@ -280,7 +288,6 @@ contains
         ! loop index
         integer :: j
 
-        
         w0 = 1.0 + 2.0 / (13.0 * real(s**2))
         temp1 = w0**2 - 1.0
         temp2 = sqrt(temp1)
@@ -303,7 +310,7 @@ contains
         dzjm2 = 0.0
         d2zjm1 = 0.0
         d2zjm2 = 0.0
-        
+
         do j = 2, s
             zj = 2.0 * w0 * zjm1 - zjm2
             dzj = 2.0 * w0 * dzjm1 - dzjm2 + 2.0 * zjm1
@@ -316,8 +323,7 @@ contains
             mu_t = mu * w1 / w0
 
             ! calculate derivative
-            !call time_derivative(t_rkc, y_jm1, y_j, p)
-            call time_derivative(t_rkc, y_test1, y_test2, p)
+            call time_derivative(t_rkc, y_jm1, y_j, p)
 
             y_j(:) = (1.0 - mu - nu) * y_0 + (mu * y_jm1) + (nu * y_jm2) &
                      + h * mu_t * (y_j - (gamma_t * F_0))
