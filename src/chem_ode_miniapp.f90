@@ -161,7 +161,7 @@ program chem_ode_miniapp
                     clock_time(5:10)//new_line('a')
 
     WRITE(*,*) "system_clock: ", (c1 - c0) / rate
-d
+
 contains ! ---------------------------------------------------------------------
 
     subroutine save_tracers(time_in_days)
