@@ -8,6 +8,7 @@ module miniapp_rkc
     !! see the `ncarles_rkc` module.
     use chemistry, only: rhs
     implicit none
+    !$acc routine (rhs) 
     public :: initialize_rkc, rkc_integrate, rkc_inplace_step
 
     real, parameter :: UROUND = epsilon(1.0)
