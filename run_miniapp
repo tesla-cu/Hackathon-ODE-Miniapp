@@ -2,7 +2,6 @@
 # Load in modules
 module load ncarenv
 module reset
-module load mkl
 module load nvhpc
 module load cray-mpich
 ml

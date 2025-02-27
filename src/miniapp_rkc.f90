@@ -250,7 +250,7 @@ contains
 
     end function rkc_spec_rad
 
-    function rkc_step(t_rkc, h, s, y_0, F_0, p) result(y_j)
+    function rkc_step(t_rkc, h, s, y_0, F_0, p)
         !$acc routine seq
         !! Function to take a single RKC integration step of variable stage count.
         real, intent(in) :: t_rkc
@@ -265,11 +265,11 @@ contains
             !! The time derivative of current solution, dy/dt = F(y)
         real, intent(in) :: p(:)
             !! parameters to pass on to rhs subroutine
-        real, allocatable :: y_j(:)
+        real :: rkc_step(:)
             !! The solution at the end of the step
 
         ! internal work memory
-        real, dimension(:), allocatable :: y_jm1, y_jm2
+        real, :: y_jm1(:), y_jm2(:)
 
         ! variable RK stage coefficients, and related variables
         real :: w0, temp1, temp2, arg, w1, b_jm1, b_jm2, mu_t
@@ -279,7 +279,7 @@ contains
         ! loop index
         integer :: j
 
-        allocate (y_j, y_jm1, y_jm2, mold=y_0)
+        allocate (rkc_step, y_jm1, y_jm2, mold=y_0)
 
         w0 = 1.0 + 2.0 / (13.0 * real(s**2))
         temp1 = w0**2 - 1.0
@@ -316,14 +316,14 @@ contains
             mu_t = mu * w1 / w0
 
             ! calculate derivative
-            call rhs(t_rkc, y_jm1, y_j, p)
+            call rhs(t_rkc, y_jm1, rkc_step, p)
 
-            y_j(:) = (1.0 - mu - nu) * y_0 + (mu * y_jm1) + (nu * y_jm2) &
-                     + h * mu_t * (y_j - (gamma_t * F_0))
+            rkc_step(:) = (1.0 - mu - nu) * y_0 + (mu * y_jm1) + (nu * y_jm2) &
+                     + h * mu_t * (rkc_step - (gamma_t * F_0))
             c_j = (mu * c_jm1) + (nu * c_jm2) + mu_t * (1.0 - gamma_t)
 
             y_jm2(:) = y_jm1
-            y_jm1(:) = y_j
+            y_jm1(:) = rkc_step
 
             c_jm2 = c_jm1
             c_jm1 = c_j
