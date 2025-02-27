@@ -7,12 +7,12 @@ module miniapp_rkc
     !! Kyle Niemeyer. For a version of RKC faithful to the NCAR-LES implementation,
     !! see the `ncarles_rkc` module.
     implicit none
-    !$acc declare create(rel_tol, abs_tol, s_max)
     public :: initialize_rkc, rkc_integrate, rkc_inplace_step
 
     real, parameter :: UROUND = epsilon(1.0)
     real :: rel_tol, abs_tol
     integer :: s_max
+    !$acc declare create(rel_tol, abs_tol, s_max)
 
     interface
         subroutine time_derivative(t, y, ydot, p)

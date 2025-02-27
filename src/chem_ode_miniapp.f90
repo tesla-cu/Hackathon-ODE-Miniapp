@@ -5,8 +5,6 @@ program chem_ode_miniapp
     use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
     implicit none ! ------------------------------------------------------------
-    ! variables for gpu
-    !$acc declare create(time_derivative, time, dt_save, start_time, end_time, nx, nx_loc, tracers, args, y_0, p_0)
     ! subroutines for gpu
     !$acc routine (save_tracers) 
     !$acc routine (time_derivative) 
@@ -38,6 +36,9 @@ program chem_ode_miniapp
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
         !! and it's 0D initial condition
     real :: y_0(nscl), p_0(nargs)
+
+    ! variables for gpu
+    !$acc declare create(time_derivative, time, dt_save, start_time, end_time, nx, nx_loc, tracers, args, y_0, p_0)
 
     namelist /params/ start_time, end_time, save_name, dt_save, &
         nx, temperature, salinity, y_0
