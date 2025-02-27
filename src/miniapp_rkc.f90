@@ -38,7 +38,7 @@ contains
         !$acc routine seq
         real, intent(in) :: t, dt
         real, intent(inout) :: y(:)
-        real, intent(in), optional :: p(:)
+        real, intent(in) :: p(:)
         real :: ydot(size(y))  ! initial derivative at time `t`
         call rhs(t, y, ydot, p)
         y(:) = rkc_step(t, dt, s_max, y, ydot, p)
@@ -55,8 +55,8 @@ contains
             !! The desired final time.
         real, intent(inout) :: y(:)
             !! Solution vector at `t_i` on input, at `t_f` on output
-        real, intent(in), optional :: p(:)
-            !! optional parameters to pass on to rhs subroutine
+        real, intent(in) :: p(:)
+            !! parameters to pass on to rhs subroutine
 
         ! work arrays
         real, dimension(:), allocatable :: y_end, ydot, vtemp1, vtemp2, eigenv
@@ -193,8 +193,8 @@ contains
             !! Estimate of ODE system eigenvalues
         real, intent(out) :: Fv(:)
             !! Time derivative of eigenalues, dv/dt = F(v)
-        real, intent(in), optional :: p(:)
-            !! optional parameters to pass on to rhs subroutine
+        real, intent(in)  :: p(:)
+            !! parameters to pass on to rhs subroutine
         real :: rkc_spec_rad
             !! function result
 
@@ -263,8 +263,8 @@ contains
             !! The current solution
         real, intent(in) :: F_0(:)
             !! The time derivative of current solution, dy/dt = F(y)
-        real, intent(in), optional :: p(:)
-            !! optional parameters to pass on to rhs subroutine
+        real, intent(in) :: p(:)
+            !! parameters to pass on to rhs subroutine
         real, allocatable :: y_j(:)
             !! The solution at the end of the step
 
