@@ -3,7 +3,7 @@ FC := mpif90 # OR mpif90, etc. nvfortran
 SRCDIR := src
 BUILDDIR := build
 
-SOURCES := src/miniapp_rkc.f90 src/chemistry.f90 src/chem_ode_miniapp.f90
+SOURCES := src/chemistry.f90 src/miniapp_rkc.f90 src/chem_ode_miniapp.f90
 
 # Generate corresponding object file paths in the build directory
 OBJECTS := $(patsubst $(SRCDIR)/%.f90, $(BUILDDIR)/%.o, $(SOURCES))
