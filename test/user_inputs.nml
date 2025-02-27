@@ -10,7 +10,7 @@
         !! solution save rate [s]
     nx = 64, 32, 32
         !! 3D domain size
-    nflat = 1
+    nflat = 0
         !! how many spatial dimensions to flatten {0 to 3}
     temperature = 25.0,
         !! temperature [degC]
