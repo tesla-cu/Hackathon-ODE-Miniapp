@@ -300,7 +300,6 @@ contains
         d2zjm1 = 0.0
         d2zjm2 = 0.0
         
-        !$acc loop 
         do j = 2, s
             zj = 2.0 * w0 * zjm1 - zjm2
             dzj = 2.0 * w0 * dzjm1 - dzjm2 + 2.0 * zjm1
@@ -313,7 +312,8 @@ contains
             mu_t = mu * w1 / w0
 
             ! calculate derivative
-            call time_derivative(t_rkc, y_jm1, y_j, p)
+            !call time_derivative(t_rkc, y_jm1, y_j, p)
+            call time_derivative(t_rkc, y_0, F_0, p)
 
             y_j(:) = (1.0 - mu - nu) * y_0 + (mu * y_jm1) + (nu * y_jm2) &
                      + h * mu_t * (y_j - (gamma_t * F_0))

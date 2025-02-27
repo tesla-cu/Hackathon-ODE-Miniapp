@@ -113,8 +113,8 @@ program chem_ode_miniapp
     nt = 0
     do while (time < end_time)
         ! CHANGE FOR LOOP FOR MPI
-        !$acc parallel
-        !$acc loop collapse(3) copyin(tracers, args, p, y) copyout(tracers)
+        !$acc parallel copyin(tracers, args, p, y) copyout(tracers)
+        !$acc loop collapse(3)
         do kzl = 1, nx_loc(3)
             do jyl = 1, nx_loc(2)
                 do ixl = 1, nx_loc(1)
