@@ -6,6 +6,7 @@ module miniapp_rkc
     !! version of RKC compared to what was added to NCAR-LES by Kat Smith and
     !! Kyle Niemeyer. For a version of RKC faithful to the NCAR-LES implementation,
     !! see the `ncarles_rkc` module.
+    use chemistry, only: rhs
     implicit none
     public :: initialize_rkc, rkc_integrate, rkc_inplace_step
 
