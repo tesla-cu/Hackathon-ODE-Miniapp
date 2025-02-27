@@ -269,7 +269,8 @@ contains
             !! The solution at the end of the step
 
         ! internal work memory
-        real :: y_jm1(:), y_jm2(:)
+        real :: y_jm1(:)
+        real :: y_jm2(:)
 
         ! variable RK stage coefficients, and related variables
         real :: w0, temp1, temp2, arg, w1, b_jm1, b_jm2, mu_t
