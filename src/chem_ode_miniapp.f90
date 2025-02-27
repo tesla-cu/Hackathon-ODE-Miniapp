@@ -1,7 +1,7 @@
 program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     !!
-
+    use iso_fortran_env, only: DP => real64, LI => int64
     use chemistry, only: time_derivative, nscl, nargs
     use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
@@ -29,8 +29,23 @@ program chem_ode_miniapp
     real :: y_0(nscl)
     real :: p_0(nargs)
 
+    integer(LI) :: c0, c1, cr
+    real(DP)    :: rate
+    character(len=10) :: clock_time
+
     namelist /params/ start_time, end_time, save_name, dt_save, &
         nx, nflat, temperature, salinity, y_0
+
+    call date_and_time(time=clock_time)
+    call system_clock(count_rate=cr)
+    rate = real(cr, DP)
+    call system_clock(c0)
+
+    write(*, '(A)') '------------------------------------------------'//   &
+                    '------------------------------------------------'
+    write(*, '(A)') 'MINIAPP started at '//             &
+                    clock_time(1:2)//':'//clock_time(3:4)//':'//           &
+                    clock_time(5:10)//new_line('a')
 
     ! Configuration and Setup --------------------------------------------------
     ! Read namelists from input file
@@ -136,6 +151,17 @@ program chem_ode_miniapp
     close (save_unit)
     deallocate (tracers, args)
 
+    call system_clock(c1)
+    call date_and_time(time=clock_time)
+
+    write(*, '(A)') '------------------------------------------------'//   &
+                    '------------------------------------------------'
+    write(*, '(A)') 'MINIAPP finished at '//             &
+                    clock_time(1:2)//':'//clock_time(3:4)//':'//           &
+                    clock_time(5:10)//new_line('a')
+
+    WRITE(*,*) "system_clock: ", (c1 - c0) / rate
+d
 contains ! ---------------------------------------------------------------------
 
     subroutine save_tracers(time_in_days)
