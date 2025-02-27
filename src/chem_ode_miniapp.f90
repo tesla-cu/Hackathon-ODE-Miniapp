@@ -95,16 +95,17 @@ program chem_ode_miniapp
 
     !TODO: Add perturbations to the ICs, like sinusoids or random noise, so that
     !      each spatial point solves a slightly different trajectory in state space
-    do kz = 1, nx_loc(3)
-        do jy = 1, nx_loc(2)
-            do ix = 1, nx_loc(1)
-                tracers(:, ix, jy, kz) = y_0
-                args(:, ix, jy, kz) = p_0
-            end do
-        end do
-    end do
-
-    !print *, 'tracers after defined in matrix: ', tracers(:, 1, 1, 1)
+    !do kz = 1, nx_loc(3)
+    !    do jy = 1, nx_loc(2)
+    !        do ix = 1, nx_loc(1)
+    !            tracers(:, ix, jy, kz) = y_0
+    !            args(:, ix, jy, kz) = p_0
+    !        end do
+    !    end do
+    !end do
+    tracers(:, :, :, :) = y_0 * ones([nscl, nx_loc(1), nx_loc(2), nx_loc(3)])
+    args(:, :, :, :) = p_0 * ones([nargs, nx_loc(1), nx_loc(2), nx_loc(3)])
+    print *, 'tracers after defined in matrix: ', tracers(:, 1, 1, 1)
 
     close (nml_unit)
 
@@ -116,7 +117,7 @@ program chem_ode_miniapp
     ! Compute the averages and save
     call save_tracers(time_in_days=.true.)
 
-    !print *, 'tracers after initial condition print: ', tracers(:, 1, 1, 1)
+    print *, 'tracers after initial condition print: ', tracers(:, 1, 1, 1)
 
 !$acc enter data copyin(tracers,args)
     ! Time integration loop ----------------------------------------------------
@@ -126,7 +127,7 @@ program chem_ode_miniapp
         select case(nflat)
         case(0)
             write(*,*) "Inside Case 0"
-            !print *, 'tracers after in while loop before dcdt: ', tracers(:, 1, 1, 1)
+            print *, 'tracers after in while loop before dcdt: ', tracers(:, 1, 1, 1)
 !$acc parallel
 !$acc loop gang vector collapse(3) private(y,p)
             do kz = 1, nx_loc(3)
@@ -146,7 +147,7 @@ program chem_ode_miniapp
                 end do
             end do
 !$acc end parallel
-            !print *, 'tracers after in while loop after dcdt: ', tracers(:, 1, 1, 1)
+            print *, 'tracers after in while loop after dcdt: ', tracers(:, 1, 1, 1)
 
         case(1)
             write(*,*) "Inside Case 1"
