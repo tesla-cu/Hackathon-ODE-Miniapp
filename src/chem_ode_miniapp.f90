@@ -35,10 +35,10 @@ program chem_ode_miniapp
     real, allocatable :: args(:, :, :, :)
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
         !! and it's 0D initial condition
-    real :: y_0(nscl), p_0(nargs)
+    real :: y_0(nscl), p_0(nargs), y(nscl), p(nargs)
 
     ! variables for gpu
-    !$acc declare create(time, dt_save, start_time, end_time, nx, nx_loc, tracers, args, y_0, p_0)
+    !$acc declare create(time, dt_save, start_time, end_time, nx, nx_loc, tracers, args, y_0, p_0, y, p)
 
     namelist /params/ start_time, end_time, save_name, dt_save, &
         nx, temperature, salinity, y_0
@@ -114,15 +114,18 @@ program chem_ode_miniapp
     nt = 0
     do while (time < end_time)
         ! CHANGE FOR LOOP FOR MPI
-        !$acc parallel loop collapse(3) copyin(tracers, args)
+        !$acc parallel loop collapse(3) copyin(tracers, args, p, y)
         do kzl = 1, nx_loc(3)
             do jyl = 1, nx_loc(2)
                 do ixl = 1, nx_loc(1)
-                    call rkc_integrate(time, time + dt_save, tracers(ixl, jyl, :, kzl), args(ixl, jyl, :, kzl))
+                    p = args(ixl, jyl, :, kzl)
+                    y = tracers(ixl, jyl, :, kzl)
+                    call rkc_integrate(time_derivative, time, time + dt_save, y, p)
+                    tracers(ixl, jyl, :, kzl) = y
                 end do
             end do
         end do
-        !$acc end parallel loop
+        !$acc end parallel loop copyout(tracers)
         nt = nt + 1
         time =  time + dt_save
         !$acc kernels
