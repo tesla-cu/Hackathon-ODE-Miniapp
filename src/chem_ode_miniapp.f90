@@ -1,13 +1,12 @@
 program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     use mpi
-    use chemistry, only: rhs, nscl, nargs
+    use chemistry, only: nscl, nargs
     use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
     implicit none ! ------------------------------------------------------------
     ! subroutines for gpu
     !$acc routine (save_tracers) 
-    !$acc routine (rhs) 
     !$acc routine (initialize_rkc)  
     !$acc routine (rkc_integrate) 
 

@@ -6,7 +6,7 @@ module miniapp_rkc
     !! version of RKC compared to what was added to NCAR-LES by Kat Smith and
     !! Kyle Niemeyer. For a version of RKC faithful to the NCAR-LES implementation,
     !! see the `ncarles_rkc` module.
-    use chemistry, only: time_derivative
+    !use chemistry, only: time_derivative
     implicit none
     !$acc routine (time_derivative) 
     public :: initialize_rkc, rkc_integrate, rkc_inplace_step
@@ -300,6 +300,7 @@ contains
         d2zjm1 = 0.0
         d2zjm2 = 0.0
         
+        !$acc loop 
         do j = 2, s
             zj = 2.0 * w0 * zjm1 - zjm2
             dzj = 2.0 * w0 * dzjm1 - dzjm2 + 2.0 * zjm1
