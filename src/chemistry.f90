@@ -6,7 +6,7 @@ module chemistry
     real, parameter :: SEC_PER_DAY = 86400.0
 
 contains
-    subroutine time_derivative(t, y, ydot, p)
+    subroutine rhs(t, y, ydot, p)
         !$acc routine seq
         real, intent(in) :: t
         real, intent(in) :: y(nscl), p(nargs)
@@ -70,6 +70,6 @@ contains
         ydot(6) = b2 * y(2) - a2 * y(1) * y(6) - a4 * y(2) * y(6) + b4 * y(3) + a5 &
                   - b5 * H_qss * y(6) - a6 * y(4) * y(6) + b6 * y(5)
 
-    end subroutine time_derivative
+    end subroutine rhs
 
 end module chemistry

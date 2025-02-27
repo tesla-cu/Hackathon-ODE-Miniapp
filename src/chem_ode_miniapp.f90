@@ -1,13 +1,13 @@
 program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     use mpi
-    use chemistry, only: time_derivative, nscl, nargs
+    use chemistry, only: rhs, nscl, nargs
     use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
     implicit none ! ------------------------------------------------------------
     ! subroutines for gpu
     !$acc routine (save_tracers) 
-    !$acc routine (time_derivative) 
+    !$acc routine (rhs) 
     !$acc routine (initialize_rkc)  
     !$acc routine (rkc_integrate) 
 
@@ -118,7 +118,7 @@ program chem_ode_miniapp
         do kzl = 1, nx_loc(3)
             do jyl = 1, nx_loc(2)
                 do ixl = 1, nx_loc(1)
-                    call rkc_integrate(time_derivative, time, time + dt_save, tracers(ixl, jyl, :, kzl), args(ixl, jyl, :, kzl))
+                    call rkc_integrate(time, time + dt_save, tracers(ixl, jyl, :, kzl), args(ixl, jyl, :, kzl))
                 end do
             end do
         end do
