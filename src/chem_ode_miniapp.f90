@@ -71,8 +71,8 @@ program chem_ode_miniapp
     nx_loc(1) = nx(1) / px
     nx_loc(2) = nx(2) / py
     nx_loc(3) = nx(3)
-    allocate(tracers(nx_loc(1), nx_loc(2), nscl, nx_loc(3)))
-    allocate(args(nx_loc(1), nx_loc(2), nargs, nx_loc(3)))
+    allocate(tracers(nscl, nx_loc(1), nx_loc(2), nx_loc(3)))
+    allocate(args(nargs, nx_loc(1), nx_loc(2), nx_loc(3)))
 
     ! Read in the chemical initial condition from the input file
     read (nml_unit, nml=params)
@@ -94,8 +94,8 @@ program chem_ode_miniapp
                 ! across the entirety of the x-dimension
                 !ixg = nx_loc(1)*px_rank + ixl ! px_rank goes from 0 to px-1
                 !linear_x = 0.8 + 0.4 * real(ixg-1)/real(nx(1)-1) ! ixg/nx(1) goes from 0.0 to 1.0
-                tracers(ixl, jyl, :, kzl) = y_0(:)
-                args(ixl, jyl, :, kzl) = p_0(:)
+                tracers(:, ixl, jyl, kzl) = y_0(:)
+                args(:, ixl, jyl, kzl) = p_0(:)
             end do
         end do
     end do
@@ -118,10 +118,10 @@ program chem_ode_miniapp
         do kzl = 1, nx_loc(3)
             do jyl = 1, nx_loc(2)
                 do ixl = 1, nx_loc(1)
-                    p = args(ixl, jyl, :, kzl)
-                    y = tracers(ixl, jyl, :, kzl)
-                    call rkc_integrate(time_derivative, time, time + dt_save, y, p)
-                    tracers(ixl, jyl, :, kzl) = y
+                    p = args(:, ixl, jyl, kzl)
+                    y = tracers(:, ixl, jyl, kzl)
+                    call rkc_integrate(time, time + dt_save, y, p)
+                    tracers(:, ixl, jyl, kzl) = y
                 end do
             end do
         end do
@@ -162,7 +162,7 @@ contains ! ---------------------------------------------------------------------
         if (present(time_in_days) .and. time_in_days) io_time = io_time / SEC_PER_DAY
 
         do i = 1, nscl
-            io_tracer1(i) = sum(tracers(:, :, i, :))
+            io_tracer1(i) = sum(tracers(i, :, :, :))
         end do
         !> This will only change `io_tracer` on rank 0, but printing out to prove it...
         call MPI_Reduce(io_tracer1, io_tracer2, nscl, MPI_REAL8, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
@@ -172,7 +172,7 @@ contains ! ---------------------------------------------------------------------
 
         if (rank == 0) then
             write (save_unit, fmt) 'averages: ', io_time, io_tracer2 / product(nx) ! convert sum to average
-            write (save_unit, fmt) 'first pt: ', io_time, tracers(1, 1, :, 1)
+            write (save_unit, fmt) 'first pt: ', io_time, tracers(:, 1, 1, 1)
         end if
     end subroutine save_tracers
 
