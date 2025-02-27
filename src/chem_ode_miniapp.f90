@@ -203,7 +203,6 @@ program chem_ode_miniapp
     call MPI_FINALIZE(ierr)
 contains ! ---------------------------------------------------------------------
     subroutine save_tracers(time_in_days)
-        !$acc routine seq 
         !! DOCSTRING
         implicit none
         logical, intent(in), optional :: time_in_days
