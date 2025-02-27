@@ -1,7 +1,8 @@
 program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
-    use mpi
-    use chemistry, only: nscl, nargs
+    !!
+    use iso_fortran_env, only: DP => real64, LI => int64
+    use chemistry, only: time_derivative, nscl, nargs
     use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
     implicit none ! ------------------------------------------------------------
@@ -10,7 +11,7 @@ program chem_ode_miniapp
     !$acc routine (initialize_rkc)  
     !$acc routine (rkc_integrate) 
 
-    character(len=*), parameter :: input_file = "user_inputs.nml"
+    character(len=*), parameter :: input_file = "./test/user_inputs.nml"
 
     character(len=128) :: save_name
         !! output filenames
@@ -22,8 +23,8 @@ program chem_ode_miniapp
         !! temperature [deg C], and salinity [units]
     integer :: nx(3), nx_loc(3)
         !! 3D size of domain
-    integer :: nt, save_unit, nml_unit
-    integer :: ixl, ixg, jyl, kzl, ip, jyg, kzg
+    integer :: nt, save_unit, nml_unit, nflat, npts
+    integer :: ixl, ixg, jyl, kzl, ip, jyg, kz, kg
     real :: linear_x, linear_y, linear_z, exp_z
        !! MPI variables
     integer :: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d
@@ -36,11 +37,15 @@ program chem_ode_miniapp
         !! and it's 0D initial condition
     real :: y_0(nscl), p_0(nargs), y(nscl), p(nargs)
 
+    integer(LI) :: c0, c1, cr
+    real(DP)    :: rate
+    character(len=10) :: clock_time
+
     ! variables for gpu
     !$acc declare create(time, dt_save, start_time, end_time, nx, nx_loc, tracers, args, y_0, p_0, y, p)
 
     namelist /params/ start_time, end_time, save_name, dt_save, &
-        nx, temperature, salinity, y_0
+        nx, nflat, temperature, salinity, y_0
     
     call MPI_INIT(ierr)
     call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
@@ -61,46 +66,46 @@ program chem_ode_miniapp
     px_rank = coords(1)
     py_rank = coords(2)
 
+    call date_and_time(time=clock_time)
+    call system_clock(count_rate=cr)
+    rate = real(cr, DP)
+    call system_clock(c0)
+
+    write(*, '(A)') '------------------------------------------------'//   &
+                    '------------------------------------------------'
+    write(*, '(A)') 'MINIAPP started at '//             &
+                    clock_time(1:2)//':'//clock_time(3:4)//':'//           &
+                    clock_time(5:10)//new_line('a')
+
     ! Configuration and Setup --------------------------------------------------
     ! Read namelists from input file
     open (newunit=nml_unit, file=input_file, status="old")
     read (nml_unit, nml=params)
     rewind (nml_unit)
-    
-    nx_loc(1) = nx(1) / px
-    nx_loc(2) = nx(2) / py
-    nx_loc(3) = nx(3)
-    allocate(tracers(nscl, nx_loc(1), nx_loc(2), nx_loc(3)))
-    allocate(args(nargs, nx_loc(1), nx_loc(2), nx_loc(3)))
 
-    ! Read in the chemical initial condition from the input file
-    read (nml_unit, nml=params)
     p_0(1) = temperature
     p_0(2) = salinity
-    close (nml_unit)
-    
-    ! Add some pt-to-pt variations, added 'l' to end of indices to be extra clear
-    !$acc parallel loop collapse(3) copyin(y_0, p_0) copyout(tracers, args)
-    do kzl = 1, nx_loc(3)
-        !kzg = nx_loc(3) + kzl
-        !linear_z = 0.8 + 0.4 * real(kzg-1)/real(nx(3)-1)
-        !exp_z = exp(-real(kzg-1)/real(nx(3)-1)) ! -z decay from 0m to -100m 
-        do jyl = 1, nx_loc(2)
-            !jyg = nx_loc(2)*py_rank + jyl ! px_rank goes from 0 to px-1
-            !linear_y = 0.8 + 0.4 * real(jyg-1)/real(nx(2)-1) ! ixg/nx(1) goes from 0.0 to 1.0
-            do ixl = 1, nx_loc(1)
-                ! ramp all initial conditions from 80% to 120% of nominal value
-                ! across the entirety of the x-dimension
-                !ixg = nx_loc(1)*px_rank + ixl ! px_rank goes from 0 to px-1
-                !linear_x = 0.8 + 0.4 * real(ixg-1)/real(nx(1)-1) ! ixg/nx(1) goes from 0.0 to 1.0
-                tracers(:, ixl, jyl, kzl) = y_0(:)
-                args(:, ixl, jyl, kzl) = p_0(:)
+
+    ! NOTE: allocation of nscl/nargs as intermediate dimension before
+    ! z-direction is how NCAR-LES does it currently. This is sure
+    ! to be inefficient and should be changed as part of testing.
+    ! DON'T FORGET TO CHANGE SAVE_TRACERS AS WELL!
+    allocate (tracers(nscl, nx(1), nx(2), nx(3)))
+    allocate (args(nargs, nx(1), nx(2), nx(3)))
+
+    !TODO: Add perturbations to the ICs, like sinusoids or random noise, so that
+    !      each spatial point solves a slightly different trajectory in state space
+    do kz = 1, nx(3)
+        do jy = 1, nx(2)
+            do ix = 1, nx(1)
+                tracers(ix, jy, :, kz) = y_0
+                args(ix, jy, :, kz) = p_0
             end do
         end do
     end do
-    !$acc end parallel loop
-    !$acc exit data delete(y_0, p_0)
-    ! Initialize the ODE solver, which associates the `solve_interval` pointer
+
+    close (nml_unit)
+
     call initialize_rkc(1e-6, 1e-10)
 
     ! Open file on ROOT for saving tracer history
@@ -109,32 +114,86 @@ program chem_ode_miniapp
     ! Compute the averages and save
     call save_tracers(time_in_days=.true.)
 
+!$acc enter data copyin(tracers,args)
     ! Time integration loop ----------------------------------------------------
     nt = 0
     do while (time < end_time)
-        ! CHANGE FOR LOOP FOR MPI
-        !$acc parallel copyin(tracers, args, p, y) copyout(tracers)
-        !$acc loop collapse(3)
-        do kzl = 1, nx_loc(3)
-            do jyl = 1, nx_loc(2)
-                do ixl = 1, nx_loc(1)
-                    p = args(:, ixl, jyl, kzl)
-                    y = tracers(:, ixl, jyl, kzl)
-                    call rkc_integrate(time, time + dt_save, y, p)
-                    tracers(:, ixl, jyl, kzl) = y
+
+        select case(nflat)
+        case(0)
+            write(*,*) "Inside Case 0"
+!$acc parallel
+!$acc loop gang vector collapse(3) private(y,p)
+            do kz = 1, nx(3)
+                do jy = 1, nx(2)
+                    do ix = 1, nx(1)
+                      do k=1,nscl
+                        y(k) = tracers(k, ix, jy, kz) ! these are not contiguous arrays, must be copied!
+                      enddo
+                      do k=1,nargs
+                        p(k) = args(k, ix, jy, kz) ! these are not contiguous arrays, must be copied!
+                      enddo
+                        call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
+                      do k=1,nscl
+                        tracers(k, ix, jy, kz) = y(k)
+                      enddo
+                    end do
                 end do
             end do
-        end do
-        !$acc end parallel
-        nt = nt + 1
-        time =  time + dt_save
+!$acc end parallel
+
+        case(1)
+            write(*,*) "Inside Case 1"
+            do kz = 1, nx(3)
+                do jy = 1, nx(2)
+                    y(:) = reshape(tracers(:, :, jy, kz), [npts*nscl])
+                    p(:) = reshape(args(:, :, jy, kz), [npts*nargs])
+                    call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
+                    tracers(:, :, jy, kz) = reshape(y, [nscl, nx(1)])
+                end do
+            end do
+
+        case(2)
+            write(*,*) "Inside Case 2"
+            do kz = 1, nx(3)
+                y(:) = reshape(tracers(:, :, :, kz), [npts*nscl])
+                p(:) = reshape(args(:, :, :, kz), [npts*nargs])
+                call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
+                tracers(:, :, :, kz) = reshape(y, [nscl, nx(1), nx(2)])
+            end do
+
+        case(3)
+            write(*,*) "Inside Case 3"
+            y(:) = reshape(tracers, [npts*nscl])
+            p(:) = reshape(args, [npts*nargs])
+            call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
+            tracers(:, :, :, :) = reshape(y, [nscl, nx(1), nx(2), nx(3)])
+
+        end select
+
+        time = time + dt_save
+
+!$acc update host(tracers)
+        print *, 'saving output', nt
         call save_tracers(time_in_days=.true.)
 
     end do
 
     ! Finalization -------------------------------------------------------------
     close (save_unit)
+!$acc exit data delete(tracers,args)
     deallocate (tracers, args)
+
+    call system_clock(c1)
+    call date_and_time(time=clock_time)
+
+    write(*, '(A)') '------------------------------------------------'//   &
+                    '------------------------------------------------'
+    write(*, '(A)') 'MINIAPP finished at '//             &
+                    clock_time(1:2)//':'//clock_time(3:4)//':'//           &
+                    clock_time(5:10)//new_line('a')
+
+    WRITE(*,*) "system_clock: ", (c1 - c0) / rate
 
     call MPI_FINALIZE(ierr)
 contains ! ---------------------------------------------------------------------
