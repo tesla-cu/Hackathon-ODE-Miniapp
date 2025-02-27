@@ -2,12 +2,12 @@ program chem_ode_miniapp
     !! ADD PROGRAM DOCSTRING(S)
     !!
     use iso_fortran_env, only: DP => real64, LI => int64
-    use chemistry, only: time_derivative, nscl, nargs
+    use chemistry, only: nscl, nargs
     use miniapp_rkc, only: initialize_rkc, rkc_integrate
 
     implicit none ! ------------------------------------------------------------
 
-    character(len=*), parameter :: input_file = "user_inputs.nml"
+    character(len=*), parameter :: input_file = "./test/user_inputs.nml"
 
     character(len=128) :: save_name
         !! output filenames
@@ -20,14 +20,14 @@ program chem_ode_miniapp
     integer :: nx(3)
         !! 3D size of domain
     integer :: nt, save_unit, nml_unit, nflat, npts
-    integer :: ix, jy, kz
+    integer :: ix, jy, kz, k
 
-    real, allocatable, target :: tracers(:, :, :, :), y(:)
+    real, allocatable :: tracers(:, :, :, :)
         !! 3D reacting scalars state vector
-    real, allocatable, target :: args(:, :, :, :), p(:)
+    real, allocatable :: args(:, :, :, :)
         !! 3D non-reacting scalars vector (e.g., temperature, salinity, etc.)
-    real :: y_0(nscl)
-    real :: p_0(nargs)
+    real :: y_0(nscl), y(nscl)
+    real :: p_0(nargs), p(nargs)
 
     integer(LI) :: c0, c1, cr
     real(DP)    :: rate
@@ -88,7 +88,7 @@ program chem_ode_miniapp
     case(3)
         npts = product(nx)
     end select
-    allocate (y(npts*nscl), p(npts*nargs))
+!!!    allocate (y(npts*nscl), p(npts*nargs))
 
     call initialize_rkc(1e-6, 1e-10)
 
@@ -96,51 +96,66 @@ program chem_ode_miniapp
     open (newunit=save_unit, file=trim(adjustl(save_name)), action="write", status="replace")
     call save_tracers(time_in_days=.true.)
 
+!$acc enter data copyin(tracers,args)
     ! Time integration loop ----------------------------------------------------
     nt = 0
     do while (time < end_time)
 
         select case(nflat)
         case(0)
+            write(*,*) "Inside Case 0"
+!$acc parallel
+!$acc loop gang vector collapse(3) private(y,p)
             do kz = 1, nx(3)
                 do jy = 1, nx(2)
                     do ix = 1, nx(1)
-                        y(:) = tracers(:, ix, jy, kz)
-                        p(:) = args(:, ix, jy, kz)
-                        call rkc_integrate(time_derivative, time, time + dt_save, y, p)
-                        tracers(:, ix, jy, kz) = y
+                      do k=1,nscl
+                        y(k) = tracers(k, ix, jy, kz) ! these are not contiguous arrays, must be copied!
+                      enddo
+                      do k=1,nargs
+                        p(k) = args(k, ix, jy, kz) ! these are not contiguous arrays, must be copied!
+                      enddo
+                        call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
+                      do k=1,nscl
+                        tracers(k, ix, jy, kz) = y(k)
+                      enddo
                     end do
                 end do
             end do
+!$acc end parallel
 
         case(1)
+            write(*,*) "Inside Case 1"
             do kz = 1, nx(3)
                 do jy = 1, nx(2)
                     y(:) = reshape(tracers(:, :, jy, kz), [npts*nscl])
                     p(:) = reshape(args(:, :, jy, kz), [npts*nargs])
-                    call rkc_integrate(time_derivative, time, time + dt_save, y, p)
+                    call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
                     tracers(:, :, jy, kz) = reshape(y, [nscl, nx(1)])
                 end do
             end do
 
         case(2)
+            write(*,*) "Inside Case 2"
             do kz = 1, nx(3)
                 y(:) = reshape(tracers(:, :, :, kz), [npts*nscl])
                 p(:) = reshape(args(:, :, :, kz), [npts*nargs])
-                call rkc_integrate(time_derivative, time, time + dt_save, y, p)
+                call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
                 tracers(:, :, :, kz) = reshape(y, [nscl, nx(1), nx(2)])
             end do
 
         case(3)
+            write(*,*) "Inside Case 3"
             y(:) = reshape(tracers, [npts*nscl])
             p(:) = reshape(args, [npts*nargs])
-            call rkc_integrate(time_derivative, time, time + dt_save, y, p)
+            call rkc_integrate(time, time + dt_save, y, p, npts, nscl, nargs)
             tracers(:, :, :, :) = reshape(y, [nscl, nx(1), nx(2), nx(3)])
 
         end select
 
         time = time + dt_save
 
+!$acc update host(tracers)
         print *, 'saving output', nt
         call save_tracers(time_in_days=.true.)
         nt = nt + 1
@@ -149,6 +164,7 @@ program chem_ode_miniapp
 
     ! Finalization -------------------------------------------------------------
     close (save_unit)
+!$acc exit data delete(tracers,args)
     deallocate (tracers, args)
 
     call system_clock(c1)

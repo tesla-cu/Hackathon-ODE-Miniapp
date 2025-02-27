@@ -8,13 +8,13 @@ module chemistry
 contains
 
     pure subroutine time_derivative(t, y, ydot, p)
+!$acc routine 
         real, intent(in) :: t
         real, intent(in) :: y(0:) ! explicitly setting lbound inside this routine
         real, intent(out) :: ydot(0:) ! same
         real, intent(in), optional :: p(0:) ! same
 
-        real, dimension(nscl) :: c, dcdt
-
+        real :: c(nscl), dcdt(nscl)
         integer :: npts, ipt, ic, iarg
         real :: K1s, K2s, Kw, Kb, Rgas, salt, temp, H_qss
         real :: a1, a2, a3, a4, a5, a6, a7
@@ -23,7 +23,6 @@ contains
         associate (t => t); end associate
         npts = size(y) / nscl
 
-        !$acc parallel loop private(dcdt, c)
         do ipt = 0, npts-1
             ic = ipt*nscl
             iarg = ipt*nargs
