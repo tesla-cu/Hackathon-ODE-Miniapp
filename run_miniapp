@@ -9,7 +9,7 @@ ml
 ## flag options: -gopt -O4 -byteswapio -Mfree -Mnosave -Mrecursive -Mstack_arrays -acc=gpu -Minfo=acc -gpu=lineinfo,ccnative,safecache -cuda
 mkkir -p build
 # Compile
-nvfortran -O3 -acc=gpu -Minfo=acc -gpu=lineinfo,ccnative,safecache -cuda -c src/chemistry.f90 src/miniapp_rkc.f90
+nvfortran -O3 -acc=gpu -Minfo=acc -gpu=lineinfo,ccnative,safecache -c src/chemistry.f90 src/miniapp_rkc.f90
 # testing coupling instead of: nvfortran -g -O3 -acc -c src/chemistry.f90
 nvfortran -O3 -acc=gpu -Minfo=acc -gpu=lineinfo,ccnative,safecache -c src/chem_ode_miniapp.f90
 nvfortran -r8 -acc=gpu -Minfo=ftn,all -module ./build -O3 -acc=gpu -Minfo=acc -gpu=lineinfo,ccnative,safecache -cuda
