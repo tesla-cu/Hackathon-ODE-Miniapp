@@ -114,7 +114,8 @@ program chem_ode_miniapp
     nt = 0
     do while (time < end_time)
         ! CHANGE FOR LOOP FOR MPI
-        !$acc parallel loop collapse(3) copyin(tracers, args, p, y)
+        !$acc parallel
+        !$acc loop collapse(3) copyin(tracers, args, p, y) copyout(tracers)
         do kzl = 1, nx_loc(3)
             do jyl = 1, nx_loc(2)
                 do ixl = 1, nx_loc(1)
@@ -125,12 +126,9 @@ program chem_ode_miniapp
                 end do
             end do
         end do
-        !$acc end parallel loop copyout(tracers)
+        !$acc end parallel
         nt = nt + 1
         time =  time + dt_save
-        !$acc kernels
-        if (rank == 0) print *, 'saving output', nt
-        !$acc end kernels
         call save_tracers(time_in_days=.true.)
 
     end do

@@ -7,8 +7,8 @@ module load cray-mpich
 ml
 
 # Compile
-nvfortran -g -O2 -acc -fast -c src/miniapp_rkc.f90
-nvfortran -g -O2 -acc -fast -c src/chemistry.f90
+nvfortran -g -O2 -acc -fast -c src/chemistry.f90 src/miniapp_rkc.f90
+# testing coupling instead of: nvfortran -g -O2 -acc -fast -c src/chemistry.f90
 nvfortran -g -O2 -acc -fast -c src/chem_ode_miniapp.f90
 nvfortran -r8 -acc=multicore -Minfo=ftn,all -module ./build -g -O2
 # Creating executable
