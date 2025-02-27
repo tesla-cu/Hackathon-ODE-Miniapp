@@ -6,7 +6,6 @@ module miniapp_rkc
     !! version of RKC compared to what was added to NCAR-LES by Kat Smith and
     !! Kyle Niemeyer. For a version of RKC faithful to the NCAR-LES implementation,
     !! see the `ncarles_rkc` module.
-    use chemistry, only: rhs
     implicit none
     !$acc routine (rhs) 
     public :: initialize_rkc, rkc_integrate, rkc_inplace_step
@@ -15,6 +14,15 @@ module miniapp_rkc
     real :: rel_tol, abs_tol
     integer :: s_max
     !$acc declare create(rel_tol, abs_tol, s_max)
+
+    interface
+        pure subroutine time_derivative(t, y, ydot, p)
+            real, intent(in) :: t
+            real, intent(in) :: y(:)
+            real, intent(out) :: ydot(:)
+            real, intent(in), optional :: p(:)
+        end subroutine time_derivative
+    end interface
 
 contains
 
@@ -34,21 +42,22 @@ contains
 
     end subroutine initialize_rkc
 
-    subroutine rkc_inplace_step(t, dt, y, p)
+    subroutine rkc_inplace_step(rhs, t, dt, y, p)
         !$acc routine seq
+        procedure(time_derivative) :: rhs
         real, intent(in) :: t, dt
         real, intent(inout) :: y(:)
         real, intent(in) :: p(:)
         real :: ydot(size(y))  ! initial derivative at time `t`
         call rhs(t, y, ydot, p)
-        y(:) = rkc_step(t, dt, s_max, y, ydot, p)
+        y(:) = rkc_step(rhs, t, dt, s_max, y, ydot, p)
     end subroutine rkc_inplace_step
 
-    subroutine rkc_integrate(t_i, t_f, y, p)
+    subroutine rkc_integrate(rhs, t_i, t_f, y, p)
         !$acc routine seq
         !! Integrate forward in time using adaptive Runge-Kutta-Chebyshev as an
         !! inner timestepper for stiff chemistry
-        
+        procedure(time_derivative) :: rhs
         real, intent(in) :: t_i
             !! The initial time.
         real, intent(in) :: t_f
@@ -59,7 +68,7 @@ contains
             !! parameters to pass on to rhs subroutine
 
         ! work arrays
-        real, dimension(:), allocatable :: y_end, ydot, vtemp1, vtemp2, eigenv
+        real, dimension(size(y)) :: y_end, ydot, vtemp1, vtemp2, eigenv
         ! internal work arrays: not all may be necessary, haven't figured out minimum
         ! needed working memory. `eigenv` used to be stored in work(4:)
 
@@ -69,7 +78,6 @@ contains
         real :: t_rkc, hmax, hmin, err, est, adapt, temp1, temp2
 
         ! Initialize progress variables
-        allocate (y_end, ydot, vtemp1, vtemp2, eigenv, mold=y)
         ny = size(y)
 
         t_rkc = t_i
@@ -80,7 +88,7 @@ contains
         hmin = 10.0 * UROUND * max(abs(t_i), hmax) ! minimum timestep size
         call rhs(t_rkc, y, ydot, p) ! calculate RHS for initial y input
         eigenv = ydot ! initial estimate of eigenvector
-        rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+        rho = rkc_spec_rad(rhs, t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
         err_old = 0.0
         h_old = 0.0
 
@@ -107,7 +115,7 @@ contains
         ! INTEGRATE TO END TIME
         do !while (t_rkc >= t_f)
             ! perform tentative time step
-            y_end = rkc_step(t_rkc, h_n, s, y, ydot, p)
+            y_end = rkc_step(rhs, t_rkc, h_n, s, y, ydot, p)
 
             ! calculate F_np1 with tenative y_np1
             call rhs(t_rkc, y_end, vtemp1, p)
@@ -125,7 +133,7 @@ contains
             ! If error too large, reject step and do not update t_rkc, etc.
             if (err >= 1.0) then
                 h_n = 0.8 * h_n / (err**(1.0 / 3.0))
-                rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+                rho = rkc_spec_rad(rhs, t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
                 cycle
             end if
 
@@ -168,17 +176,17 @@ contains
 
             ! re-estimate Jacobian spectral radius every 25 steps
             if (mod(nstep, 25) == 0) then
-                rho = rkc_spec_rad(t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
+                rho = rkc_spec_rad(rhs, t_rkc, hmax, y, ydot, eigenv, vtemp2, p)
             end if
 
         end do ! while loop
 
     end subroutine rkc_integrate
 
-    function rkc_spec_rad(t_rkc, hmax, y, F, v, Fv, p)
+    function rkc_spec_rad(rhs, t_rkc, hmax, y, F, v, Fv, p)
         !$acc routine seq
         !! Function to estimate upper bound of the spectral radius of stability
-        
+        procedure(time_derivative) :: rhs
         real, intent(in) :: t_rkc
             !! The current time.
             !! NOTE: unused dummy argument! Kept for backwards compatibility.
@@ -250,9 +258,10 @@ contains
 
     end function rkc_spec_rad
 
-    function rkc_step(t_rkc, h, s, y_0, F_0, p) result(y_j)
+    function rkc_step(rhs, t_rkc, h, s, y_0, F_0, p) result(y_j)
         !$acc routine seq
         !! Function to take a single RKC integration step of variable stage count.
+        procedure(time_derivative) :: rhs
         real, intent(in) :: t_rkc
             !! The current time. Here for generic integrator compatibility.
         real, intent(in) :: h
