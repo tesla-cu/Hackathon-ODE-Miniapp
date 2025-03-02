@@ -104,7 +104,7 @@ program chem_ode_miniapp
             end do
         end do
     end do
-    print *, 'tracers after defined in matrix: ', tracers(:, 1, 1, 1)
+    !print *, 'tracers after defined in matrix: ', tracers(:, 1, 1, 1)
 
     close (nml_unit)
 
@@ -116,7 +116,7 @@ program chem_ode_miniapp
     ! Compute the averages and save
     call save_tracers(time_in_days=.true.)
 
-    print *, 'tracers after initial condition print: ', tracers(:, 1, 1, 1)
+    !print *, 'tracers after initial condition print: ', tracers(:, 1, 1, 1)
 
 !$acc enter data copyin(tracers,args)
     ! Time integration loop ----------------------------------------------------
@@ -125,8 +125,8 @@ program chem_ode_miniapp
 
         select case(nflat)
         case(0)
-            write(*,*) "Inside Case 0"
-            print *, 'tracers after in while loop before dcdt: ', tracers(:, 1, 1, 1)
+            !write(*,*) "Inside Case 0"
+            !print *, 'tracers after in while loop before dcdt: ', tracers(:, 1, 1, 1)
 !$acc parallel
 !$acc loop gang vector collapse(3) private(y,p)
             do kz = 1, nx_loc(3)
@@ -146,7 +146,7 @@ program chem_ode_miniapp
                 end do
             end do
 !$acc end parallel
-            print *, 'tracers after in while loop after dcdt: ', tracers(:, 1, 1, 1)
+            !print *, 'tracers after in while loop after dcdt: ', tracers(:, 1, 1, 1)
 
         case(1)
             write(*,*) "Inside Case 1"
@@ -180,7 +180,7 @@ program chem_ode_miniapp
         time_track = time_track + dt_save
 
 !$acc update host(tracers)
-        print *, 'saving output', nt
+        !print *, 'saving output', nt
         call save_tracers(time_in_days=.true.)
 
     end do
