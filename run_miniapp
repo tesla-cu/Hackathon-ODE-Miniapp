@@ -14,7 +14,7 @@ cd test/
 
 cat > EXEC_STEP << EXEC
 #!/bin/bash
-#PBS -A UCSG0002
+#PBS -A ucsg0002
 #PBS -N hybrid_job
 #PBS -q tutorial 
 #PBS -l walltime=00:10:00
