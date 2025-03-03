@@ -25,8 +25,9 @@ program chem_ode_miniapp
     real :: linear_x, linear_y, linear_z, exp_z
        !! MPI variables
     integer :: rank, nprocs, ierr, px, py, px_rank, py_rank, comm2d !, MPI_COMM_WORLD
-    integer :: dims(3), coords(3)
-    logical :: periods(3)
+    integer :: dims(2), coords(2)
+    logical :: periods(2)
+        !! MPI variables, 2D since we want the entire vertical column on each rank
     real, allocatable :: tracers(:, :, :, :)
         !! 3D reacting scalars state vector and 0D initial condition
     real, allocatable :: args(:, :, :, :)
@@ -48,12 +49,12 @@ program chem_ode_miniapp
     ! Assign each MPI process a GPU 
     !$acc set device_num(rank) 
 
-    dims = [0, 0, 0]
+    dims = [0, 0]
     periods = [.true., .true., .true.]
 
     call MPI_Dims_create(nprocs, MPI_COMM_WORLD, dims, ierr)
-    call MPI_Cart_create(MPI_COMM_WORLD, 3, dims, periods, .true., comm2d, ierr)
-    call MPI_Cart_coords(comm2d, rank, 3, coords, ierr)
+    call MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, .true., comm2d, ierr)
+    call MPI_Cart_coords(comm2d, rank, 2, coords, ierr)
 
     px = dims(1)
     py = dims(2)
