@@ -16,7 +16,7 @@ cat > EXEC_STEP << EXEC
 #!/bin/bash
 #PBS -A ucsg0002
 #PBS -N hybrid_job
-#PBS -q tutorial 
+#PBS -q main 
 #PBS -l walltime=00:10:00
 #PBS -l select=1:ncpus=1:mpiprocs=1:ngpus=1:mem=16GB
 #PBS -j oe
