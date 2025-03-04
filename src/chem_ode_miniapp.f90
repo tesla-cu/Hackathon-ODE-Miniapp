@@ -52,7 +52,7 @@ program chem_ode_miniapp
     dims = [0, 0]
     periods = [.true., .true.]
 
-    call MPI_Dims_create(nprocs, MPI_COMM_WORLD, dims, ierr)
+    call MPI_Dims_create(nprocs, 2, dims, ierr)
     call MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, .true., comm2d, ierr)
     call MPI_Cart_coords(comm2d, rank, 2, coords, ierr)
 
