@@ -55,11 +55,16 @@ program chem_ode_miniapp
     call MPI_Dims_create(nprocs, 2, dims, ierr)
     call MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, .true., comm2d, ierr)
     call MPI_Cart_coords(comm2d, rank, 2, coords, ierr)
+    
+    print *, 'dims: ', dims
 
     px = dims(1)
     py = dims(2)
     px_rank = coords(1)
     py_rank = coords(2)
+    
+    print *, 'px_rank: ', px_rank
+    print *, 'py_rank: ', py_rank
 
     nx_loc(1) = nx(1) / px
     nx_loc(2) = nx(2) / py
