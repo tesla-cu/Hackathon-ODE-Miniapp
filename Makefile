@@ -72,7 +72,7 @@ OPT5 := -O3 -ipo -fast-transcendentals -no-prec-div -nostandard-realloc-lhs # -f
 
 else ifeq ($(COMPILER),nvhpc)
 
-FFLAGS := -gopt -O4 -byteswapio -Mfree -Mrecursive -Mstack_arrays -acc=gpu -Minfo=acc -gpu=lineinfo,cc80,safecache -cuda
+FFLAGS := -gopt -O4 -byteswapio -Mfree -Mrecursive -Mstack_arrays -acc=gpu -Minfo=acc -gpu=lineinfo,safecache -cuda
 LDFLAGS :=
 
 #DBG1 := -O0 -g -Mbounds -Mchkptr -byteswapio -Mfree -Ktrap=divz,fp,inv,ovf -traceback -Mnosave -Mrecursive

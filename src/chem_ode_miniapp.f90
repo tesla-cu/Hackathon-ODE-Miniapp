@@ -66,10 +66,6 @@ program chem_ode_miniapp
     print *, 'px_rank: ', px_rank
     print *, 'py_rank: ', py_rank
 
-    nx_loc(1) = nx(1) / px
-    nx_loc(2) = nx(2) / py
-    nx_loc(3) = nx(3)
-
     call date_and_time(time=clock_time)
     call system_clock(count_rate=cr)
     rate = real(cr, DP)
@@ -86,6 +82,12 @@ program chem_ode_miniapp
     open (newunit=nml_unit, file=input_file, status="old")
     read (nml_unit, nml=params)
     rewind (nml_unit)
+    
+    nx_loc(1) = nx(1) / px
+    nx_loc(2) = nx(2) / py
+    nx_loc(3) = nx(3)
+
+    print *, 'nx: ', nx
 
     p_0(1) = temperature
     p_0(2) = salinity
