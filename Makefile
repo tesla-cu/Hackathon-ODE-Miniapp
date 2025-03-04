@@ -69,9 +69,10 @@ OPT4 := -O3 -ipo # -qopt-zmm-usage=high may help or hurt if added here
 OPT5 := -O3 -ipo -fast-transcendentals -no-prec-div -nostandard-realloc-lhs # -fimf-precision=high or link to MKL!
 # Other stuff: it's possible settings like -qopt-zmm-usage=high, and
 # -mcmodel=medium could help performance and/or avoid runtime memory errors.
+
 else ifeq ($(COMPILER),nvhpc)
 
-FFLAGS := -gopt -O4 -byteswapio -Mfree -Mnosave -Mrecursive -Mstack_arrays -acc=gpu -Minfo=acc -gpu=lineinfo,ccnative,safecache -cuda
+FFLAGS := -gopt -O4 -byteswapio -Mfree -Mrecursive -Mstack_arrays -acc=gpu -Minfo=acc -gpu=lineinfo,cc80,safecache -cuda
 LDFLAGS :=
 
 #DBG1 := -O0 -g -Mbounds -Mchkptr -byteswapio -Mfree -Ktrap=divz,fp,inv,ovf -traceback -Mnosave -Mrecursive
