@@ -63,8 +63,8 @@ program chem_ode_miniapp
     px_rank = coords(1)
     py_rank = coords(2)
     
-    print *, 'px_rank: ', px_rank
-    print *, 'py_rank: ', py_rank
+    ! print *, 'px_rank: ', px_rank
+    ! print *, 'py_rank: ', py_rank
 
     call date_and_time(time=clock_time)
     call system_clock(count_rate=cr)
@@ -112,7 +112,7 @@ program chem_ode_miniapp
             end do
         end do
     end do
-    !print *, 'tracers after defined in matrix: ', tracers(:, 1, 1, 1)
+    print *, 'tracers after defined in matrix: ', tracers(:, 1, 1, 1)
 
     close (nml_unit)
 
@@ -124,7 +124,7 @@ program chem_ode_miniapp
     ! Compute the averages and save
     call save_tracers(time_in_days=.true.)
 
-    !print *, 'tracers after initial condition print: ', tracers(:, 1, 1, 1)
+    print *, 'tracers after initial condition print: ', tracers(:, 1, 1, 1)
 
 !$acc enter data copyin(tracers,args)
     ! Time integration loop ----------------------------------------------------
@@ -154,7 +154,7 @@ program chem_ode_miniapp
                 end do
             end do
 !$acc end parallel
-            !print *, 'tracers after in while loop after dcdt: ', tracers(:, 1, 1, 1)
+            print *, 'tracers in while loop after dcdt: ', tracers(:, 1, 1, 1)
 
         case(1)
             write(*,*) "Inside Case 1"
@@ -188,7 +188,7 @@ program chem_ode_miniapp
         time_track = time_track + dt_save
 
 !$acc update host(tracers)
-        !print *, 'saving output', nt
+        print *, 'saving output', nt
         call save_tracers(time_in_days=.true.)
 
     end do
